@@ -45,26 +45,6 @@ const LeaveApplication = () => {
     }
   };
 
-  // const handleSubmit = (e: React.FormEvent) => {
-  //   e.preventDefault();
-    
-  //   const formData = {
-  //     employeeName,
-  //     supervisorName,
-  //     department,
-  //     leaveDate,
-  //     leaveTime,
-  //     selectedReasons,
-  //     otherReason
-  //   };
-    
-  //   console.log('Leave application submitted:', formData);
-    
-  //   toast({
-  //     title: "Leave Request Submitted",
-  //     description: "Your leave request has been submitted successfully. HR will contact you shortly."
-  //   });
-  // };
   const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
 
