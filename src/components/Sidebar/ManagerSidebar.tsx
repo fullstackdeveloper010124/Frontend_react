@@ -12,14 +12,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   const menuItems = [
-    { icon: BarChart3, label: 'Dashboard', href: '/dashboard' },
-    { icon: Clock, label: 'Timesheets', href: '/timesheets' },
-    { icon: FileText, label: 'Projects', href: '/projects' },
-    { icon: Users, label: 'Team', href: '/team' },
-    { icon: BarChart3, label: 'Reports', href: '/reports' },
-    { icon: ClipboardList, label: 'Leave Application', href: '/leave-application' },
-    { icon: ClipboardList, label: 'Invoice', href: '/invoice' },
-    { icon: Settings, label: 'Settings', href: '/settings' },
+    { icon: BarChart3, label: 'Dashboard', href: '/manager/dashboard' },
+    { icon: Clock, label: 'Timesheets', href: '/manager/timesheets' },
+    { icon: FileText, label: 'Projects', href: '/manager/projects' },
+    { icon: Users, label: 'Team', href: '/manager/team' },
+    { icon: BarChart3, label: 'Reports', href: '/manager/reports' },
+    { icon: ClipboardList, label: 'Leave Application', href: '/manager/leave-application' },
+    { icon: ClipboardList, label: 'Invoice', href: '/manager/invoice' },
+    { icon: Settings, label: 'Settings', href: '/manager/settings' },
   ];
 
   return (

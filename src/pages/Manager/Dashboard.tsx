@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sidebar } from '@/components/Sidebar/ManagerSidebar';
 import { Header } from '@/components/navbar/ManagerHeader';
-import { Dashboard } from '@/pages/manager/Dashboard';
-// import { TimeTracker } from '@/components/TimeTracker';
-// import { TimeEntries } from '@/components/TimeEntries';
-// import { WeeklySummary } from '@/components/WeeklySummary';
-// import { RecentActivity } from '@/components/RecentActivity';
-// import { UpcomingDeadlines } from '@/components/UpcomingDeadlines';
-// import { ThemeProvider } from '@/components/ThemeProvider';
+import { Dashboard } from '@/components/New folder/Dashboard';
+import { TimeTracker } from '@/components/New folder/TimeTracker';
+import { TimeEntries } from '@/components/New folder/TimeEntries';
+import { WeeklySummary } from '@/components/New folder/WeeklySummary';
+import { RecentActivity } from '@/components/New folder/RecentActivity';
+import { UpcomingDeadlines } from '@/components/New folder/UpcomingDeadlines';
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

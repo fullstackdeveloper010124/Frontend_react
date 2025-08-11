@@ -52,8 +52,13 @@ const Login = () => {
         description: "Logged in successfully!"
       });
 
-      // Navigate to dashboard
-      navigate('/dashboard');
+      // Navigate to role-specific dashboard
+      const roleToPath: Record<string, string> = {
+        Admin: '/admin/dashboard',
+        Manager: '/manager/dashboard',
+        Employee: '/employee/dashboard',
+      };
+      navigate(roleToPath[formData.role] || '/admin/dashboard');
     } catch (error: any) {
       toast({
         title: "Login Failed",

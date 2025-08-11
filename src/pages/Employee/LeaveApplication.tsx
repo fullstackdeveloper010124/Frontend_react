@@ -11,8 +11,8 @@ import { CalendarIcon, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
+import { Sidebar } from '@/components/Sidebar/EmployeeSidebar';
+import { Header } from '@/components/navbar/EmployeeHeader';
 
 const LeaveApplication = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

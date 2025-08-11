@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Menu, Search, Bell, Sun, Moon, LogOut } from 'lucide-react';
-import { useTheme } from './ThemeProvider';
+import { useTheme } from '@/components/New folder/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
