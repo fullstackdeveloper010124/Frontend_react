@@ -9,8 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    name: '',
+    // firstName: '',
+    // lastName: '',
     phoneNumber: '',
     email: '',
     password: '',
@@ -41,9 +42,10 @@ const Signup = () => {
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/signup', {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+      const response = await axios.post('http://localhost:5000/api/team/signup', {
+        // firstName: formData.firstName,
+        // lastName: formData.lastName,
+        name: formData.name,
         phone: formData.phoneNumber,
         email: formData.email,
         password: formData.password,
@@ -81,17 +83,17 @@ const Signup = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
+                <Label htmlFor="firstName">full Name</Label>
                 <Input
-                  id="firstName"
-                  name="firstName"
+                  id="name"
+                  name="name"
                   type="text"
-                  value={formData.firstName}
+                  value={formData.name}
                   onChange={handleInputChange}
                   required
                 />
               </div>
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input
                   id="lastName"
@@ -101,7 +103,7 @@ const Signup = () => {
                   onChange={handleInputChange}
                   required
                 />
-              </div>
+              </div> */}
             </div>
 
             <div className="space-y-2">
