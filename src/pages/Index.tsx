@@ -114,9 +114,10 @@ const Login = () => {
                 onChange={handleRoleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"
               >
+                <option value="Employee">Employee</option>
                 <option value="Admin">Admin</option>
                 <option value="Manager">Manager</option>
-                <option value="Employee">Employee</option>
+                
               </select>
             </div>
 
