@@ -36,7 +36,7 @@ const Login = () => {
     e.preventDefault();
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
+      const response = await axios.post('http://localhost:5000/api/team/login', {
         email: formData.usernameOrEmail,
         password: formData.password,
         role: formData.role, // Send the selected role
@@ -54,9 +54,9 @@ const Login = () => {
 
       // Navigate to role-specific dashboard
       const roleToPath: Record<string, string> = {
+        Employee: '/employee/dashboard',
         Admin: '/admin/dashboard',
         Manager: '/manager/dashboard',
-        Employee: '/employee/dashboard',
       };
       navigate(roleToPath[formData.role] || '/admin/dashboard');
     } catch (error: any) {
