@@ -1,25 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
-import { Sidebar } from "../components/Sidebar";
-import { Header } from "../components/Header";
-import { ThemeProvider } from "../components/ThemeProvider";
+import { Header } from "@/components/navbar/AdminHeader";
+import { Sidebar } from "@/components/Sidebar/AdminSidebar";
+import { ThemeProvider } from "@/components/New folder/ThemeProvider";
 import { Plus } from "lucide-react";
-import { Button } from "../components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../components/ui/dialog";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
-import { Textarea } from "../components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {  Dialog,  DialogContent,  DialogHeader,  DialogTitle,} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {  Select,  SelectContent,  SelectItem,  SelectTrigger,  SelectValue,} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 // Define an interface for your project structure for better type safety
 interface Project {

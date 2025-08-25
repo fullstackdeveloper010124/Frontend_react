@@ -1,16 +1,16 @@
 import React from "react";
-import EmployeeNavbar from "@/components/Navbar/EmployeeNavbar";
-import EmployeeSidebar from "@/components/Sidebar/EmployeeSidebar";
+import { Header} from "@/components/navbar/EmployeeHeader";
+import { Sidebar } from "@/components/Sidebar/EmployeeSidebar";
 import { Outlet } from "react-router-dom";
 
 const EmployeeLayout = () => {
   return (
     <div className="employee-layout">
       {/* Employee Navbar */}
-      <EmployeeNavbar />
+      <Header onMenuClick={() => { /* handle menu click */ }} />
       <div className="employee-content">
         {/* Employee Sidebar */}
-        <EmployeeSidebar />
+        <Sidebar isOpen={true} onClose={() => { /* handle sidebar close */ }} />
         <div className="main-content">
           {/* Render nested routes here */}
           <Outlet />

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { Sidebar } from '@/components/Sidebar/ManagerSidebar';
+import { Header } from '@/components/navbar/ManagerHeader';
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { BarChart3, PieChart, TrendingUp, Download, Calendar, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';

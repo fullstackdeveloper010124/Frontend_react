@@ -1,16 +1,16 @@
 import React from "react";
-import AdminNavbar from "@/components/Navbar/AdminNavbar";
-import AdminSidebar from "@/components/Sidebar/AdminSidebar";
+import {Header} from "@/components/navbar/AdminHeader";
+import {Sidebar} from "@/components/Sidebar/AdminSidebar";
 import { Outlet } from "react-router-dom";
 
 const AdminLayout = () => {
   return (
     <div className="admin-layout">
       {/* Admin Navbar */}
-      <AdminNavbar />
+      <Header onMenuClick={() => {}} />
       <div className="admin-content">
         {/* Admin Sidebar */}
-        <AdminSidebar />
+        <Sidebar isOpen={true} onClose={() => {}} />
         <div className="main-content">
           {/* Render nested routes here */}
           <Outlet />

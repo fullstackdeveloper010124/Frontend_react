@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sidebar } from "../components/Sidebar"; // Assuming path is correct
-import { Header } from "../components/Header"; // Assuming path is correct
+import { Sidebar } from "@/components/Sidebar/ManagerSidebar"; // Assuming path is correct
+import { Header } from "@/components/navbar/ManagerHeader"; // Assuming path is correct
 
 // Define the type for a single task item in the invoice table
 interface InvoiceTask {

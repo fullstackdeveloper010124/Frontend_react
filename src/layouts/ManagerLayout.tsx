@@ -1,16 +1,17 @@
 import React from "react";
-import ManagerNavbar from "@/components/Navbar/ManagerNavbar";
-import ManagerSidebar from "@/components/Sidebar/ManagerSidebar";
+import { Header } from "@/components/navbar/ManagerHeader";
+import { Sidebar } from "@/components/Sidebar/ManagerSidebar";
 import { Outlet } from "react-router-dom";
+
 
 const ManagerLayout = () => {
   return (
     <div className="manager-layout">
       {/* Manager Navbar */}
-      <ManagerNavbar />
+      <Header onMenuClick={() => {}} />
       <div className="manager-content">
         {/* Manager Sidebar */}
-        <ManagerSidebar />
+        <Sidebar isOpen={true} onClose={() => {}} />
         <div className="main-content">
           {/* Render nested routes here */}
           <Outlet />

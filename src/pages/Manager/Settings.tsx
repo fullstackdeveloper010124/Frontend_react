@@ -1,8 +1,8 @@
 
 import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { Sidebar } from '@/components/Sidebar/ManagerSidebar';
+import { Header } from '@/components/navbar/ManagerHeader';
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { User, Bell, Clock, Shield, Database, Palette } from 'lucide-react';
 
 const Settings = () => {
