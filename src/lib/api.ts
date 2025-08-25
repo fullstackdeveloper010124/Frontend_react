@@ -1,6 +1,6 @@
 // Centralized API URLs for the project
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "http://localhost:5000/api"; // or your deployed backend
 
 export const API_URLS = {
   signup: `${API_BASE_URL}/team/signup`,
@@ -13,5 +13,4 @@ export const API_URLS = {
   // Add more endpoints as needed
   // Example: dashboard: `${API_BASE_URL}/dashboard`,
 };
-
 export default API_URLS;
