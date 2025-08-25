@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import API_URLS from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -42,7 +44,7 @@ const Signup = () => {
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/team/signup', {
+  const response = await axios.post(API_URLS.signup, {
         // firstName: formData.firstName,
         // lastName: formData.lastName,
         name: formData.name,

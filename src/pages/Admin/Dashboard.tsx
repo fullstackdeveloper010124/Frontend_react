@@ -9,6 +9,7 @@ import { WeeklySummary } from '@/components/New folder/WeeklySummary';
 import { RecentActivity } from '@/components/New folder/RecentActivity';
 import { UpcomingDeadlines } from '@/components/New folder/UpcomingDeadlines';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
+import API_URLS from '@/lib/api';
 
 
 const Index = () => {

@@ -1,33 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { Sidebar } from '@/components/Sidebar/AdminSidebar';
+import { Header } from '@/components/navbar/AdminHeader';
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { Plus, Trash2, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter
-} from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import {  Dialog,  DialogContent,  DialogHeader,  DialogTitle,  DialogTrigger,  DialogFooter} from '@/components/ui/dialog';
+import {  AlertDialog,  AlertDialogAction,  AlertDialogCancel,  AlertDialogContent,  AlertDialogDescription,  AlertDialogFooter,  AlertDialogHeader,  AlertDialogTitle, AlertDialogTrigger,} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import axios from 'axios';
 import { toast } from '@/hooks/use-toast';
+import API_URLS from '@/lib/api';
 
 const Team = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

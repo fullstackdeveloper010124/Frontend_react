@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import API_URLS from '@/lib/api';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -14,7 +15,7 @@ const ForgotPassword = () => {
     e.preventDefault();
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/forgot-password", {
+  const response = await fetch(API_URLS.forgotPassword || "http://localhost:5000/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

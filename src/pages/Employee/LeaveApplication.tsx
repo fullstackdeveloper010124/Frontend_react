@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Sidebar } from '@/components/Sidebar/EmployeeSidebar';
 import { Header } from '@/components/navbar/EmployeeHeader';
+import API_URLS from '@/lib/api';
 
 const LeaveApplication = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
