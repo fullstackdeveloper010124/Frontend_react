@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '@/contexts/AuthContext';
 import Index from '@/pages/Index';
 import AdminDashboard from '@/pages/Admin/Dashboard';
 import AdminTimesheets from '@/pages/Admin/Timesheets';
@@ -21,17 +22,20 @@ import EmployeeLeaveApplication from '@/pages/Employee/LeaveApplication';
 // New: import Login and Signup
 import Login from '@/pages/Index';
 import Signup from '@/pages/Signup';
+import TestPage from '@/pages/TestPage';
 
 const App = () => {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
         {/* Home: keep Index as landing/marketing; or replace with Login if desired */}
         <Route path="/" element={<Index />} />
 
         {/* Auth routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/test" element={<TestPage />} />
 
         {/* Dashboard routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -42,6 +46,7 @@ const App = () => {
         <Route path="/admin/settings" element={<AdminSettings />} />
         <Route path="/admin/leave-application" element={<AdminLeaveApplication />} />
         <Route path="/admin/invoice" element={<AdminNotFound />} />
+        
         <Route path="/manager/dashboard" element={<ManagerDashboard />} />
         <Route path="/manager/timesheets" element={<ManagerTimesheets />} />
         <Route path="/manager/projects" element={<ManagerProjects />} />
@@ -66,7 +71,8 @@ const App = () => {
         {/* Unknown route -> home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 };
 

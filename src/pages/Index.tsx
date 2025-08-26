@@ -1,22 +1,21 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import API_URLS from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useLogin } from '@/hooks/useApi';
 
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    usernameOrEmail: '',
+    email: '',
     password: '',
-    role: 'Employee', // Default role
   });
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { execute: executeLogin, loading, error, reset } = useLogin();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -26,45 +25,37 @@ const Login = () => {
     }));
   };
 
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const { value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      role: value
-    }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    reset(); // Reset any previous errors
+
     try {
-  const response = await axios.post(API_URLS.login, {
-        email: formData.usernameOrEmail,
+      const result = await executeLogin({
+        email: formData.email,
         password: formData.password,
-        role: formData.role, // Send the selected role
       });
 
-      const { token, user } = response.data;
-
-      // Store token locally
-      localStorage.setItem('token', token);
-
+      // The login hook will handle token storage and user data
       toast({
         title: "Success",
         description: "Logged in successfully!"
       });
 
-      // Navigate to role-specific dashboard
+      // Navigate to role-specific dashboard based on user role
       const roleToPath: Record<string, string> = {
-        Employee: '/employee/dashboard',
-        Admin: '/admin/dashboard',
-        Manager: '/manager/dashboard',
+        employee: '/employee/dashboard',
+        admin: '/admin/dashboard',
+        manager: '/manager/dashboard',
       };
-      navigate(roleToPath[formData.role] || '/employee/dashboard');
+      
+      const userRole = result.data?.user?.role || 'employee';
+      navigate(roleToPath[userRole] || '/employee/dashboard');
     } catch (error: any) {
+      console.error("Login error:", error);
       toast({
         title: "Login Failed",
-        description: error.response?.data?.message || "Invalid credentials",
+        description: error.message || "Invalid credentials",
         variant: "destructive"
       });
     }
@@ -82,14 +73,14 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="usernameOrEmail">Username or Email</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="usernameOrEmail"
-                name="usernameOrEmail"
-                type="text"
-                value={formData.usernameOrEmail}
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
                 onChange={handleInputChange}
-                placeholder="Enter your username or email"
+                placeholder="Enter your email"
                 required
               />
             </div>
@@ -107,23 +98,14 @@ const Login = () => {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleRoleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"
-              >
-                <option value="Employee">Employee</option>
-                <option value="Admin">Admin</option>
-                <option value="Manager">Manager</option>
-              </select>
-            </div>
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                {error}
+              </div>
+            )}
 
-            <Button type="submit" className="w-full">
-              Login
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing In...' : 'Login'}
             </Button>
           </form>
 

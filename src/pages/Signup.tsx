@@ -1,25 +1,26 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import API_URLS from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { useSignup } from '@/hooks/useApi';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
     name: '',
-    phone: '',   // ✅ phoneNumber বাদ দিয়ে phone
+    phone: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'Employee'
+    role: 'employee' as 'admin' | 'manager' | 'employee',
+    project: ''
   });
 
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { execute: executeSignup, loading, error, reset } = useSignup();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -49,14 +50,18 @@ const Signup = () => {
       return;
     }
 
+    reset(); // Reset any previous errors
+
     try {
-      const response = await axios.post(API_URLS.signup, {
+      await executeSignup({
         name: formData.name,
-        phone: formData.phone,   // ✅ এখানে phone যাবে
+        fullName: formData.name, // For admin/manager signup
+        phone: formData.phone,
         email: formData.email,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         role: formData.role,
+        project: formData.project || undefined
       });
 
       toast({
@@ -64,12 +69,12 @@ const Signup = () => {
         description: "Account created successfully!"
       });
 
-      navigate('/login'); // ✅ Signup শেষে Login page এ যাবে
+      navigate('/login');
     } catch (error: any) {
-      console.error("Signup error:", error.response?.data || error.message);
+      console.error("Signup error:", error);
       toast({
         title: "Signup Failed",
-        description: error.response?.data?.message || "Something went wrong",
+        description: error.message || "Something went wrong",
         variant: "destructive"
       });
     }
@@ -155,14 +160,35 @@ const Signup = () => {
                 onChange={handleRoleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"
               >
-                <option value="Employee">Employee</option>
-                <option value="Admin">Admin</option>
-                <option value="Manager">Manager</option>
+                <option value="employee">Employee</option>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
               </select>
             </div>
 
-            <Button type="submit" className="w-full">
-              Sign Up
+            {/* {formData.role === 'employee' && (
+              <div className="space-y-2">
+                <Label htmlFor="project">Project ID (Optional)</Label>
+                <Input
+                  id="project"
+                  name="project"
+                  type="text"
+                  placeholder="Enter project ID or leave empty for default"
+                  value={formData.project}
+                  onChange={handleInputChange}
+                />
+                <p className="text-xs text-gray-500">Leave empty to use default project</p>
+              </div>
+            )} */}
+
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Creating Account...' : 'Sign Up'}
             </Button>
           </form>
 
