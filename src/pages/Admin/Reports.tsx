@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { Sidebar } from '@/components/Sidebar/AdminSidebar';
+import { Header } from '@/components/navbar/AdminHeader';
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { BarChart3, PieChart, TrendingUp, Download, Calendar, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import API_URLS from '@/lib/api';
 
 const Reports = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

@@ -1,9 +1,10 @@
 
 import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { Sidebar } from '@/components/Sidebar/AdminSidebar';
+import { Header } from '@/components/navbar/AdminHeader';
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { Calendar, Clock, Filter, Download } from 'lucide-react';
+import API_URLS from '@/lib/api';
 
 const Timesheets = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

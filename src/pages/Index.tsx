@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import API_URLS from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -36,7 +38,7 @@ const Login = () => {
     e.preventDefault();
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
+  const response = await axios.post(API_URLS.login, {
         email: formData.usernameOrEmail,
         password: formData.password,
         role: formData.role, // Send the selected role
@@ -54,9 +56,9 @@ const Login = () => {
 
       // Navigate to role-specific dashboard
       const roleToPath: Record<string, string> = {
+        Employee: '/employee/dashboard',
         Admin: '/admin/dashboard',
         Manager: '/manager/dashboard',
-        Employee: '/employee/dashboard',
       };
       navigate(roleToPath[formData.role] || '/admin/dashboard');
     } catch (error: any) {
@@ -112,10 +114,13 @@ const Login = () => {
                 name="role"
                 value={formData.role}
                 onChange={handleRoleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"
+              >
+                <option value="Employee">Employee</option>
                 className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"              >
                 <option value="Admin">Admin</option>
                 <option value="Manager">Manager</option>
-                <option value="Employee">Employee</option>
+                
               </select>
             </div>
 

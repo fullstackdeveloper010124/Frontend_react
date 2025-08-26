@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import API_URLS from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,9 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    phoneNumber: '',
+    name: '',
+    phone: '',   // ✅ phoneNumber বাদ দিয়ে phone
     email: '',
     password: '',
     confirmPassword: ''
@@ -41,23 +41,21 @@ const Signup = () => {
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/signup', {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phoneNumber,
+      const response = await axios.post(API_URLS.signup, {
+        name: formData.name,
+        phone: formData.phone,   // ✅ এখানে phone যাবে
         email: formData.email,
         password: formData.password,
-        confirmPassword: formData.confirmPassword
+        confirmPassword: formData.confirmPassword,
+        role: "Employee",
       });
-
-
 
       toast({
         title: "Success",
         description: "Account created successfully!"
       });
 
-      navigate('/');
+      navigate('/login'); // ✅ Signup শেষে Login page এ যাবে
     } catch (error: any) {
       console.error("Signup error:", error.response?.data || error.message);
       toast({
@@ -79,38 +77,25 @@ const Signup = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Label htmlFor="phone">Phone Number</Label>
               <Input
-                id="phoneNumber"
-                name="phoneNumber"
+                id="phone"
+                name="phone"
                 type="tel"
-                value={formData.phoneNumber}
+                value={formData.phone}
                 onChange={handleInputChange}
                 required
               />
