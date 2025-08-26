@@ -80,7 +80,7 @@ const LeaveApplication = () => {
   };
 
   try {
-    const response = await fetch("http://localhost:5000/api/leave", {
+    const response = await fetch(API_URLS.leave, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"

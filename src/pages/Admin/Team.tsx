@@ -49,11 +49,11 @@ const Team = () => {
     const fetchMembersAndProjects = async () => {
       try {
         // Fetch team members
-        const membersRes = await axios.get('http://localhost:5000/api/team/all');
+        const membersRes = await axios.get(API_URLS.teamAll);
         setTeamMembers(membersRes.data);
 
         // Fetch projects
-        const projectsRes = await axios.get('http://localhost:5000/api/projects/all');
+        const projectsRes = await axios.get(API_URLS.projectsAll);
         setProjects(projectsRes.data);
       } catch (err) {
         console.error('Fetch Error:', err);
@@ -67,7 +67,7 @@ const Team = () => {
     // Ensure project is an actual project ID, not a string like "Project Manager"
     if (newMember.name && newMember.project && newMember.email) {
       try {
-        const res = await axios.post('http://localhost:5000/api/team/add', {
+        const res = await axios.post(API_URLS.teamAdd, {
           ...newMember,
           hoursThisWeek: 0,
           status: 'Active'
@@ -83,7 +83,7 @@ const Team = () => {
         // when fetching existing members, so we need to make sure the added member also has it.
         // We'll re-fetch all members for simplicity, or manually populate the project name here.
         // For now, let's re-fetch all for guaranteed consistency.
-        const updatedMembersRes = await axios.get('http://localhost:5000/api/team/all');
+        const updatedMembersRes = await axios.get(API_URLS.teamAll);
         setTeamMembers(updatedMembersRes.data);
 
 
@@ -130,7 +130,7 @@ const Team = () => {
     if (!memberToDeleteId) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/team/delete/${memberToDeleteId}`);
+      await axios.delete(API_URLS.teamDelete(memberToDeleteId));
       setTeamMembers(prev => prev.filter(member => member._id !== memberToDeleteId));
       toast({ title: 'Deleted', description: 'Team member removed.' });
       setIsDeleteConfirmOpen(false);
@@ -164,9 +164,9 @@ const Team = () => {
 
     if (currentMember.name && currentMember.project && currentMember.email) {
       try {
-        const res = await axios.put(`http://localhost:5000/api/team/update/${currentMember._id}`, currentMember);
+        const res = await axios.put(API_URLS.teamUpdate(currentMember._id), currentMember);
         // After updating, re-fetch all members to ensure project name is correctly displayed
-        const updatedMembersRes = await axios.get('http://localhost:5000/api/team/all');
+        const updatedMembersRes = await axios.get(API_URLS.teamAll);
         setTeamMembers(updatedMembersRes.data);
         toast({ title: 'Updated', description: 'Member updated successfully' });
         setIsEditMemberOpen(false);

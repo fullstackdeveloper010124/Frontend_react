@@ -13,7 +13,7 @@ const Login = () => {
   const [formData, setFormData] = useState({
     usernameOrEmail: '',
     password: '',
-    role: 'Admin', // Default role
+    role: 'Employee', // Default role
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -60,7 +60,7 @@ const Login = () => {
         Admin: '/admin/dashboard',
         Manager: '/manager/dashboard',
       };
-      navigate(roleToPath[formData.role] || '/admin/dashboard');
+      navigate(roleToPath[formData.role] || '/employee/dashboard');
     } catch (error: any) {
       toast({
         title: "Login Failed",
@@ -117,10 +117,8 @@ const Login = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"
               >
                 <option value="Employee">Employee</option>
-                className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"              >
                 <option value="Admin">Admin</option>
                 <option value="Manager">Manager</option>
-                
               </select>
             </div>
 

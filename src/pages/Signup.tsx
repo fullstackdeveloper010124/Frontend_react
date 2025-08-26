@@ -14,7 +14,8 @@ const Signup = () => {
     phone: '',   // ✅ phoneNumber বাদ দিয়ে phone
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    role: 'Employee'
   });
 
   const { toast } = useToast();
@@ -25,6 +26,14 @@ const Signup = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      role: value
     }));
   };
 
@@ -47,7 +56,7 @@ const Signup = () => {
         email: formData.email,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
-        role: "Employee",
+        role: formData.role,
       });
 
       toast({
@@ -135,6 +144,21 @@ const Signup = () => {
                 onChange={handleInputChange}
                 required
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <select
+                id="role"
+                name="role"
+                value={formData.role}
+                onChange={handleRoleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:text-white"
+              >
+                <option value="Employee">Employee</option>
+                <option value="Admin">Admin</option>
+                <option value="Manager">Manager</option>
+              </select>
             </div>
 
             <Button type="submit" className="w-full">

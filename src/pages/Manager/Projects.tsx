@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {  Select,  SelectContent,  SelectItem,  SelectTrigger,  SelectValue,} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import API_URLS from '@/lib/api';
 
 // Define an interface for your project structure for better type safety
 interface Project {
@@ -51,7 +52,7 @@ export default function Projects() {
   });
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/projects/all")
+    fetch(API_URLS.projectsAll)
       .then((res) => {
         if (!res.ok) {
           // Log specific HTTP error if response is not ok
@@ -136,7 +137,7 @@ export default function Projects() {
 
         const updatedProject = { ...projectToUpdate, ...newProject };
         const res = await fetch(
-          `http://localhost:5000/api/projects/${updatedProject._id}`,
+          API_URLS.projectById(updatedProject._id),
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -151,7 +152,7 @@ export default function Projects() {
         updated[editIndex] = data;
         setProjects(updated);
       } else {
-        const res = await fetch("http://localhost:5000/api/projects", {
+        const res = await fetch(API_URLS.projects, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newProject),
@@ -196,7 +197,7 @@ export default function Projects() {
 
     if (confirm(`Delete project "${project.name}"?`)) {
       try {
-        const res = await fetch(`http://localhost:5000/api/projects/${project._id}`, {
+        const res = await fetch(API_URLS.projectById(project._id), {
           method: "DELETE",
         });
         if (!res.ok) {
