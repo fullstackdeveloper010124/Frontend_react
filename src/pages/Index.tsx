@@ -8,66 +8,74 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+type Role = 'employee' | 'admin' | 'manager';
 
-const Login = () => {
+const isRole = (v: string): v is Role =>
+  v === 'employee' || v === 'admin' || v === 'manager';
+
+const ensureErrorMessage = (err: unknown): string => {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Invalid credentials';
+  }
+};
+
+const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     role: 'employee',
   });
+
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { login, user, isAuthenticated, isLoading } = useAuth();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // If already authenticated, redirect based on role
-  useEffect(() => {
-    if (isLoading) return;
-    if (isAuthenticated && user) {
-      const roleToPath: Record<string, string> = {
-        employee: '/employee/dashboard',
-        admin: '/admin/dashboard',
-        manager: '/manager/dashboard',
-      };
-      navigate(roleToPath[user.role] || '/employee/dashboard', { replace: true });
-    }
-  }, [isAuthenticated, isLoading, user, navigate]);
+  // Rename `error` to avoid shadowing with catch variable
+  const { execute: executeLogin, loading, error: loginError, reset } = useLogin();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSubmitting(true);
+
+    reset(); // Reset any previous errors
+
     try {
-      const ok = await login(formData.email, formData.password);
-      if (!ok) {
-        setError('Invalid credentials');
-        toast({ title: 'Login Failed', description: 'Invalid credentials', variant: 'destructive' });
-        return;
-      }
-      toast({ title: 'Success', description: 'Logged in successfully!' });
+      const result = await executeLogin({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      // The login hook will handle token storage and user data
+      toast({
+        title: "Success",
+        description: "Logged in successfully!"
+      });
+
+      // Navigate to role-specific dashboard based on user role
       const roleToPath: Record<string, string> = {
         employee: '/employee/dashboard',
         admin: '/admin/dashboard',
         manager: '/manager/dashboard',
       };
-      const chosenRole = user?.role || formData.role;
-      const next = roleToPath[chosenRole] || '/employee/dashboard';
-      navigate(next, { replace: true });
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err?.message || 'Login failed');
-      toast({ title: 'Login Failed', description: err?.message || 'Login failed', variant: 'destructive' });
-    } finally {
-      setSubmitting(false);
+      
+      const userRole = result.data?.user?.role || 'employee';
+      navigate(roleToPath[userRole] || '/employee/dashboard');
+    } catch (error: any) {
+      console.error("Login error:", error);
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid credentials",
+        variant: "destructive"
+      });
     }
   };
 
@@ -76,9 +84,7 @@ const Login = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>
-            Sign in to your TimeTracker account
-          </CardDescription>
+          <CardDescription>Sign in to your TimeTracker account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -122,9 +128,9 @@ const Login = () => {
               </Select>
             </div>
 
-            {error && (
+            {loginError && (
               <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                {error}
+                {typeof loginError === 'string' ? loginError : 'Login failed'}
               </div>
             )}
 
@@ -140,7 +146,7 @@ const Login = () => {
           </div>
 
           <div className="mt-2 text-center text-sm">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link to="/signup" className="text-primary hover:underline">
               Sign up here
             </Link>
