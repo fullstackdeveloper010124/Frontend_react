@@ -1,21 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { useLogin } from '@/hooks/useApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    role: 'employee',
   });
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { execute: executeLogin, loading, error, reset } = useLogin();
+  const { login, user, isAuthenticated, isLoading } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // If already authenticated, redirect based on role
+  useEffect(() => {
+    if (isLoading) return;
+    if (isAuthenticated && user) {
+      const roleToPath: Record<string, string> = {
+        employee: '/employee/dashboard',
+        admin: '/admin/dashboard',
+        manager: '/manager/dashboard',
+      };
+      navigate(roleToPath[user.role] || '/employee/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, user, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -27,37 +44,30 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    reset(); // Reset any previous errors
-
+    setError(null);
+    setSubmitting(true);
     try {
-      const result = await executeLogin({
-        email: formData.email,
-        password: formData.password,
-      });
-
-      // The login hook will handle token storage and user data
-      toast({
-        title: "Success",
-        description: "Logged in successfully!"
-      });
-
-      // Navigate to role-specific dashboard based on user role
+      const ok = await login(formData.email, formData.password);
+      if (!ok) {
+        setError('Invalid credentials');
+        toast({ title: 'Login Failed', description: 'Invalid credentials', variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Success', description: 'Logged in successfully!' });
       const roleToPath: Record<string, string> = {
         employee: '/employee/dashboard',
         admin: '/admin/dashboard',
         manager: '/manager/dashboard',
       };
-      
-      const userRole = result.data?.user?.role || 'employee';
-      navigate(roleToPath[userRole] || '/employee/dashboard');
-    } catch (error: any) {
-      console.error("Login error:", error);
-      toast({
-        title: "Login Failed",
-        description: error.message || "Invalid credentials",
-        variant: "destructive"
-      });
+      const chosenRole = user?.role || formData.role;
+      const next = roleToPath[chosenRole] || '/employee/dashboard';
+      navigate(next, { replace: true });
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message || 'Login failed');
+      toast({ title: 'Login Failed', description: err?.message || 'Login failed', variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -98,14 +108,28 @@ const Login = () => {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}>
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {error && (
               <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
                 {error}
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing In...' : 'Login'}
+            <Button type="submit" className="w-full" disabled={submitting || isLoading}>
+              {submitting ? 'Signing In...' : 'Login'}
             </Button>
           </form>
 
