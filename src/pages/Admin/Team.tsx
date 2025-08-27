@@ -9,9 +9,26 @@ import {  AlertDialog,  AlertDialogAction,  AlertDialogCancel,  AlertDialogConte
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import axios from 'axios';
-import { toast } from '@/hooks/use-toast';
-import API_URLS from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+import { teamAPI, projectAPI, TeamMember, Project } from '@/lib/api';
+
+interface NewMember {
+  employeeId: string;
+  name: string;
+  project: string;
+  email: string;
+  phone: string;
+  address: string;
+  bankName: string;
+  bankAddress: string;
+  accountHolder: string;
+  accountHolderAddress: string;
+  account: string;
+  accountType: string;
+  role: string;
+  hoursThisWeek: number;
+  status: string;
+}
 
 const Team = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,14 +36,14 @@ const Team = () => {
   const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
-  const [currentMember, setCurrentMember] = useState<any | null>(null);
+  const [currentMember, setCurrentMember] = useState<TeamMember | null>(null);
 
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]); // New state for projects
-  const [newMember, setNewMember] = useState({
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [newMember, setNewMember] = useState<NewMember>({
     employeeId: '',
     name: '',
-    project: '', // Stores project _id
+    project: '',
     email: '',
     phone: '',
     address: '',
@@ -35,8 +52,13 @@ const Team = () => {
     accountHolder: '',
     accountHolderAddress: '',
     account: '',
-    accountType: ''
+    accountType: '',
+    role: 'Employee',
+    hoursThisWeek: 0,
+    status: 'Active'
   });
+
+  const { toast } = useToast();
 
   useEffect(() => {
     if (isAddMemberOpen) {
@@ -49,25 +71,25 @@ const Team = () => {
     const fetchMembersAndProjects = async () => {
       try {
         // Fetch team members
-        const membersRes = await axios.get(API_URLS.teamAll);
-        setTeamMembers(membersRes.data);
+        const membersRes = await teamAPI.getAllTeam();
+        setTeamMembers(membersRes.data || []);
 
         // Fetch projects
-        const projectsRes = await axios.get(API_URLS.projectsAll);
-        setProjects(projectsRes.data);
+        const projectsRes = await projectAPI.getAllProjects();
+        setProjects(projectsRes.data || []);
       } catch (err) {
         console.error('Fetch Error:', err);
         toast({ title: 'Error', description: 'Failed to fetch data', variant: 'destructive' });
       }
     };
     fetchMembersAndProjects();
-  }, []);
+  }, [toast]);
 
   const handleAddMember = async () => {
     // Ensure project is an actual project ID, not a string like "Project Manager"
     if (newMember.name && newMember.project && newMember.email) {
       try {
-        const res = await axios.post(API_URLS.teamAdd, {
+        const res = await teamAPI.addTeamMember({
           ...newMember,
           hoursThisWeek: 0,
           status: 'Active'
@@ -78,14 +100,9 @@ const Team = () => {
           description: 'Team member added successfully'
         });
 
-        // Update teamMembers state with the newly added member, including populated project data
-        // The backend `populate` in the `get /all` endpoint ensures the `project` field is an object
-        // when fetching existing members, so we need to make sure the added member also has it.
-        // We'll re-fetch all members for simplicity, or manually populate the project name here.
-        // For now, let's re-fetch all for guaranteed consistency.
-        const updatedMembersRes = await axios.get(API_URLS.teamAll);
-        setTeamMembers(updatedMembersRes.data);
-
+        // Update teamMembers state with the newly added member
+        const updatedMembersRes = await teamAPI.getAllTeam();
+        setTeamMembers(updatedMembersRes.data || []);
 
         setNewMember({
           employeeId: '',
@@ -99,7 +116,10 @@ const Team = () => {
           accountHolder: '',
           accountHolderAddress: '',
           account: '',
-          accountType: ''
+          accountType: '',
+          role: 'Employee',
+          hoursThisWeek: 0,
+          status: 'Active'
         });
 
         setIsAddMemberOpen(false);
@@ -130,7 +150,7 @@ const Team = () => {
     if (!memberToDeleteId) return;
 
     try {
-      await axios.delete(API_URLS.teamDelete(memberToDeleteId));
+      await teamAPI.deleteTeamMember(memberToDeleteId);
       setTeamMembers(prev => prev.filter(member => member._id !== memberToDeleteId));
       toast({ title: 'Deleted', description: 'Team member removed.' });
       setIsDeleteConfirmOpen(false);
@@ -141,11 +161,11 @@ const Team = () => {
   };
 
   // Function to open edit modal and pre-populate data
-  const openEditModal = (member: any) => {
+  const openEditModal = (member: TeamMember) => {
     // Make sure to set the 'project' field to its _id if it's already populated as an object
     setCurrentMember({
       ...member,
-      project: member.project ? member.project._id : '' // Set project to ID for the select component
+      project: member.project ? (typeof member.project === 'string' ? member.project : member.project._id) : ''
     });
     setIsEditMemberOpen(true);
   };
@@ -164,10 +184,10 @@ const Team = () => {
 
     if (currentMember.name && currentMember.project && currentMember.email) {
       try {
-        const res = await axios.put(API_URLS.teamUpdate(currentMember._id), currentMember);
+        await teamAPI.updateTeamMember(currentMember._id, currentMember);
         // After updating, re-fetch all members to ensure project name is correctly displayed
-        const updatedMembersRes = await axios.get(API_URLS.teamAll);
-        setTeamMembers(updatedMembersRes.data);
+        const updatedMembersRes = await teamAPI.getAllTeam();
+        setTeamMembers(updatedMembersRes.data || []);
         toast({ title: 'Updated', description: 'Member updated successfully' });
         setIsEditMemberOpen(false);
         setCurrentMember(null);
@@ -236,7 +256,22 @@ const Team = () => {
                           />
                         </div>
                         <div>
-                          {/* Updated Select for Project */}
+                          <Label htmlFor="role">Role *</Label>
+                          <Select
+                            value={newMember.role}
+                            onValueChange={(value) => setNewMember({ ...newMember, role: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Employee">Employee</SelectItem>
+                              <SelectItem value="Manager">Manager</SelectItem>
+                              <SelectItem value="Admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
                           <Label htmlFor="project">Project *</Label>
                           <Select
                             value={newMember.project}
@@ -281,6 +316,39 @@ const Team = () => {
                             onChange={(e) => setNewMember({ ...newMember, address: e.target.value })}
                             placeholder="Enter full address"
                           />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="hoursThisWeek">Hours This Week</Label>
+                          <Input
+                            id="hoursThisWeek"
+                            type="number"
+                            min="0"
+                            value={newMember.hoursThisWeek}
+                            onChange={(e) => setNewMember({ ...newMember, hoursThisWeek: parseInt(e.target.value) || 0 })}
+                            placeholder="Enter hours"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="status">Status</Label>
+                          <Select
+                            value={newMember.status}
+                            onValueChange={(value) => setNewMember({ ...newMember, status: value })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Active">Active</SelectItem>
+                              <SelectItem value="Inactive">Inactive</SelectItem>
+                              <SelectItem value="Leave">On Leave</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -390,7 +458,8 @@ const Team = () => {
                   <tr>
                     <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">ID</th>
                     <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Name</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Project</th> {/* Changed to Project */}
+                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Role</th>
+                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Project</th>
                     <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Email</th>
                     <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Phone</th>
                     <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Address</th>
@@ -409,7 +478,18 @@ const Team = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.employeeId}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                        {member.project ? member.project.name : 'N/A'} {/* Display project name */}
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          member.role === 'Admin'
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400'
+                            : member.role === 'Manager'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                            : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                        }`}>
+                          {member.role || 'Employee'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                        {member.project ? (typeof member.project === 'string' ? member.project : member.project.name) : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.email}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.phone}</td>
@@ -418,14 +498,16 @@ const Team = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountHolder}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.account}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountType}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.hoursThisWeek}h</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.hoursThisWeek || 0}h</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           member.status === 'Active'
                             ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                            : member.status === 'Leave'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
                         }`}>
-                          {member.status}
+                          {member.status || 'Active'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -487,7 +569,7 @@ const Team = () => {
                     {/* Updated Select for Project in Edit */}
                     <Label htmlFor="editProject">Project *</Label>
                     <Select
-                      value={currentMember.project} // This should be the project _id
+                      value={typeof currentMember.project === 'string' ? currentMember.project : currentMember.project._id}
                       onValueChange={(value) => handleEditChange(value, 'project')}
                     >
                       <SelectTrigger>

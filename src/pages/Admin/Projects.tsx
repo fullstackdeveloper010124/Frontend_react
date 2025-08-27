@@ -9,64 +9,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {  Select,  SelectContent,  SelectItem,  SelectTrigger,  SelectValue,} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import API_URLS from '@/lib/api';
-
-// Define an interface for your project structure for better type safety
-interface Project {
-  _id?: string; // Optional because it might not exist for new projects
-  name: string;
-  client: string;
-  deadline: string;
-  description?: string;
-  progress?: number;
-  team?: number;
-  hours?: number;
-  status?: "In Progress" | "Nearly Complete" | "Completed"; // Enforce specific status values
-}
+import { projectAPI, Project } from '@/lib/api';
 
 export default function Projects() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editIndex, setEditIndex] = useState<number | null>(null); // Use number | null for index
-  const [newProject, setNewProject] = useState<Project>({
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [newProject, setNewProject] = useState({
     name: "",
-    client: "",
-    deadline: "",
     description: "",
-    progress: 0,
-    team: 0,
-    hours: 0,
-    status: "In Progress",
+    status: "active" as "active" | "completed" | "on-hold",
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: "",
+    assignedTeam: [] as string[]
   });
-  const [projects, setProjects] = useState<Project[]>([]); // Specify array of Project type
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const [filters, setFilters] = useState({
     project: "All",
-    client: "All",
-    progress: "All",
-    deadline: "All",
-    team: "All",
-    hours: "All",
     status: "All",
+    startDate: "All",
+    endDate: "All"
   });
 
   useEffect(() => {
-    fetch(API_URLS.projectsAll)
-      .then((res) => {
-        if (!res.ok) {
-          // Log specific HTTP error if response is not ok
-          throw new Error(`HTTP error! Status: ${res.status}`);
+    const fetchProjects = async () => {
+      try {
+        const response = await projectAPI.getAllProjects();
+        if (response.success && response.data) {
+          setProjects(response.data);
         }
-        return res.json();
-      })
-      .then((data: Project[]) => setProjects(data)) // Type assertion for incoming data
-      .catch((err) => console.error("Failed to load projects:", err));
+      } catch (err) {
+        console.error("Failed to load projects:", err);
+      }
+    };
+    fetchProjects();
   }, []);
 
   // Corrected unique function to handle undefined/null values
   const unique = (key: keyof Project) => {
-    // Ensure that 'key' is a valid key of the Project interface
     return [
       ...new Set(
         projects
@@ -79,27 +61,19 @@ export default function Projects() {
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
       const match = (field: keyof typeof filters, projectKey: keyof Project) => {
-        // Explicitly type field and projectKey
         if (filters[field] === "All") return true;
 
         const projectValue = p[projectKey];
         const filterValue = filters[field];
 
-        if (field === "progress") {
-          return (parseInt(projectValue as string) || 0) >= (parseInt(filterValue as string) || 0);
-        }
-        // Safely convert to string and compare
         return String(projectValue) === String(filterValue);
       };
 
       return (
-        match("project", "name") && // 'project' filter maps to 'name' property
-        match("client", "client") &&
-        match("progress", "progress") &&
-        match("deadline", "deadline") &&
-        match("team", "team") &&
-        match("hours", "hours") &&
-        match("status", "status")
+        match("project", "name") &&
+        match("status", "status") &&
+        match("startDate", "startDate") &&
+        match("endDate", "endDate")
       );
     });
   }, [filters, projects]);
@@ -108,21 +82,19 @@ export default function Projects() {
     setIsEditMode(false);
     setNewProject({
       name: "",
-      client: "",
-      deadline: "",
       description: "",
-      progress: 0,
-      team: 0,
-      hours: 0,
-      status: "In Progress",
+      status: "active" as "active" | "completed" | "on-hold",
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: "",
+      assignedTeam: []
     });
     setIsNewProjectOpen(true);
   };
 
   const handleSaveProject = async () => {
     // Basic validation
-    if (!newProject.name || !newProject.client || !newProject.deadline) {
-      alert("Please fill in Project Name, Client, and Deadline.");
+    if (!newProject.name || !newProject.startDate) {
+      alert("Please fill in Project Name and Start Date.");
       return;
     }
 
@@ -136,58 +108,41 @@ export default function Projects() {
         }
 
         const updatedProject = { ...projectToUpdate, ...newProject };
-        const res = await fetch(
-          API_URLS.projectById(updatedProject._id),
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedProject),
-          }
-        );
-        if (!res.ok) {
-          throw new Error(`HTTP error! Status: ${res.status}`);
+        const response = await projectAPI.updateProject(updatedProject._id, updatedProject);
+        if (response.success && response.data) {
+          const updated = [...projects];
+          updated[editIndex] = response.data;
+          setProjects(updated);
         }
-        const data: Project = await res.json();
-        const updated = [...projects];
-        updated[editIndex] = data;
-        setProjects(updated);
       } else {
-        const res = await fetch(API_URLS.projects, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newProject),
-        });
-        if (!res.ok) {
-          throw new Error(`HTTP error! Status: ${res.status}`);
+        const response = await projectAPI.createProject(newProject);
+        if (response.success && response.data) {
+          setProjects([...projects, response.data]);
         }
-        const data: Project = await res.json();
-        setProjects([...projects, data]);
       }
-      setIsNewProjectOpen(false); // Close dialog on success
+      setIsNewProjectOpen(false);
     } catch (err) {
       console.error("Error saving project:", err);
       alert("Failed to save project. Please check console for details and ensure backend is running.");
     }
   };
 
-  const handleEdit = (idx: number) => { // Type 'idx' as number
+  const handleEdit = (idx: number) => {
     setEditIndex(idx);
     setIsEditMode(true);
     const p = projects[idx];
     setNewProject({
       name: p.name,
-      client: p.client,
-      deadline: p.deadline,
       description: p.description || "",
-      progress: p.progress || 0,
-      team: p.team || 0,
-      hours: p.hours || 0,
-      status: p.status || "In Progress",
+      status: p.status,
+      startDate: p.startDate,
+      endDate: p.endDate || "",
+      assignedTeam: p.assignedTeam || []
     });
     setIsNewProjectOpen(true);
   };
 
-  const handleDelete = async (idx: number) => { // Type 'idx' as number
+  const handleDelete = async (idx: number) => {
     const project = projects[idx];
     if (!project || !project._id) {
       console.error("Error: Project to delete has no _id or does not exist.");
@@ -197,12 +152,7 @@ export default function Projects() {
 
     if (confirm(`Delete project "${project.name}"?`)) {
       try {
-        const res = await fetch(API_URLS.projectById(project._id), {
-          method: "DELETE",
-        });
-        if (!res.ok) {
-          throw new Error(`HTTP error! Status: ${res.status}`);
-        }
+        await projectAPI.deleteProject(project._id);
         setProjects(projects.filter((_, i) => i !== idx));
       } catch (err) {
         console.error("Error deleting project:", err);
@@ -211,24 +161,23 @@ export default function Projects() {
     }
   };
 
-  const statusBadge = (status: Project['status']) => { // Use type for status
+  const statusBadge = (status: Project['status']) => {
     switch (status) {
-      case "Completed":
+      case "completed":
         return "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400";
-      case "Nearly Complete":
+      case "on-hold":
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400";
-      default: // Handles "In Progress" and any undefined/null status gracefully
+      default:
         return "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400";
     }
   };
 
   // Robust formatDate function
-  const formatDate = (dateString: string | undefined): string => { // Allow undefined input
+  const formatDate = (dateString: string | undefined): string => {
     if (!dateString) return "";
 
     try {
       const date = new Date(dateString);
-      // Check for "Invalid Date"
       if (isNaN(date.getTime())) {
         console.warn("Invalid date string provided to formatDate:", dateString);
         return "";
@@ -288,96 +237,6 @@ export default function Projects() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="client">Client</Label>
-                    <Input
-                      id="client"
-                      value={newProject.client}
-                      onChange={(e) =>
-                        setNewProject({ ...newProject, client: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="deadline">Deadline</Label>
-                    <Input
-                      id="deadline"
-                      type="date"
-                      value={newProject.deadline}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          deadline: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="progress">Progress (%)</Label>
-                    <Input
-                      id="progress"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={newProject.progress}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          progress: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="team">Team Size</Label>
-                    <Input
-                      id="team"
-                      type="number"
-                      min="0"
-                      value={newProject.team}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          team: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="hours">Estimated Hours</Label>
-                    <Input
-                      id="hours"
-                      type="number"
-                      min="0"
-                      value={newProject.hours}
-                      onChange={(e) =>
-                        setNewProject({
-                          ...newProject,
-                          hours: parseInt(e.target.value) || 0,
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="status">Status</Label>
-                    <Select
-                      value={newProject.status}
-                      onValueChange={(value: Project['status']) => // Ensure type matches Project status
-                        setNewProject({ ...newProject, status: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="In Progress">In Progress</SelectItem>
-                        <SelectItem value="Nearly Complete">
-                          Nearly Complete
-                        </SelectItem>
-                        <SelectItem value="Completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
                     <Label htmlFor="description">Description</Label>
                     <Textarea
                       id="description"
@@ -388,6 +247,62 @@ export default function Projects() {
                           description: e.target.value,
                         })
                       }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="startDate">Start Date</Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={newProject.startDate}
+                      onChange={(e) =>
+                        setNewProject({
+                          ...newProject,
+                          startDate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="endDate">End Date</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={newProject.endDate}
+                      onChange={(e) =>
+                        setNewProject({
+                          ...newProject,
+                          endDate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="status">Status</Label>
+                    <Select
+                      value={newProject.status}
+                      onValueChange={(value: Project['status']) =>
+                        setNewProject({ ...newProject, status: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="on-hold">On Hold</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="assignedTeam">Assigned Team</Label>
+                    <Input
+                      value={newProject.assignedTeam.join(', ')}
+                      onChange={(e) =>
+                        setNewProject({ ...newProject, assignedTeam: e.target.value.split(',').map(s => s.trim()) })
+                      }
+                      placeholder="Enter team members separated by commas"
                     />
                   </div>
                   <div className="flex justify-end space-x-2">
@@ -409,7 +324,7 @@ export default function Projects() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                 <thead className="bg-gray-50 dark:bg-gray-900/40">
                   <tr>
-                    {"PROJECT CLIENT PROGRESS DEADLINE TEAM HOURS STATUS ACTIONS"
+                    {"PROJECT DESCRIPTION STATUS START DATE END DATE ASSIGNED TEAM ACTIONS"
                       .split(" ")
                       .map((label) => (
                         <th
@@ -420,20 +335,16 @@ export default function Projects() {
                         </th>
                       ))}
                   </tr>
-                  {/* Added key prop for the filter row */}
                   <tr key="filter-row" className="bg-white dark:bg-gray-800">
                     {[
                       "project",
-                      "client",
-                      "progress",
-                      "deadline",
-                      "team",
-                      "hours",
                       "status",
+                      "startDate",
+                      "endDate",
                     ].map((field) => (
                       <td key={field} className="px-6 py-2">
                         <Select
-                          value={filters[field as keyof typeof filters]} // Type assertion for filters object access
+                          value={filters[field as keyof typeof filters]}
                           onValueChange={(v) =>
                             setFilters({ ...filters, [field]: v })
                           }
@@ -445,7 +356,7 @@ export default function Projects() {
                             {["All", ...unique(field === "project" ? "name" : (field as keyof Project))].map(
                               (opt) => (
                                 <SelectItem key={opt?.toString()} value={opt?.toString() || ""}>
-                                  {field === "progress" ? `${opt || 0}%` : opt}
+                                  {opt}
                                 </SelectItem>
                               )
                             )}
@@ -453,39 +364,18 @@ export default function Projects() {
                         </Select>
                       </td>
                     ))}
-                    <td className="px-6 py-2" /> {/* Empty cell for Actions column filter */}
+                    <td className="px-6 py-2" />
+                    <td className="px-6 py-2" />
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {filteredProjects.map((project, idx) => (
-                    <tr key={project._id || idx}> {/* Use _id if available, otherwise idx */}
+                    <tr key={project._id || idx}>
                       <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
                         {project.name}
                       </td>
                       <td className="px-6 py-4 text-gray-500 dark:text-gray-300">
-                        {project.client}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-900 dark:text-white font-medium">
-                            {project.progress || 0}%
-                          </span>
-                          <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
-                            <div
-                              className="h-2 rounded-full bg-indigo-600"
-                              style={{ width: `${project.progress || 0}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500 dark:text-gray-300">
-                        {formatDate(project.deadline)}
-                      </td>
-                      <td className="px-6 py-4 text-center text-gray-500 dark:text-gray-300">
-                        {project.team || 0}
-                      </td>
-                      <td className="px-6 py-4 text-center text-gray-500 dark:text-gray-300">
-                        {project.hours || 0}
+                        {project.description}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -493,8 +383,17 @@ export default function Projects() {
                             project.status
                           )}`}
                         >
-                          {project.status || "In Progress"}
+                          {project.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-500 dark:text-gray-300">
+                        {formatDate(project.startDate)}
+                      </td>
+                      <td className="px-6 py-4 text-gray-500 dark:text-gray-300">
+                        {formatDate(project.endDate)}
+                      </td>
+                      <td className="px-6 py-4 text-gray-500 dark:text-gray-300">
+                        {project.assignedTeam?.join(', ') || 'None'}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <Button

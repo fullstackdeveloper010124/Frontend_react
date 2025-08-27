@@ -141,6 +141,26 @@ export interface LeaveApplication {
   appliedDate: string;
 }
 
+// TeamMember interface
+export interface TeamMember {
+  _id: string;
+  employeeId: string;
+  name: string;
+  project: string | { _id: string; name: string };
+  email: string;
+  phone?: string;
+  address?: string;
+  bankName?: string;
+  bankAddress?: string;
+  accountHolder?: string;
+  accountHolderAddress?: string;
+  account?: string;
+  accountType?: string;
+  hoursThisWeek?: number;
+  status?: string;
+  role?: string;
+}
+
 // Authentication API functions
 export const authAPI = {
   login: async (credentials: LoginCredentials): Promise<ApiResponse<{ token: string; user: User }>> => {
@@ -284,7 +304,7 @@ export const userAPI = {
 
 // Team API functions
 export const teamAPI = {
-  getAllTeam: async (): Promise<ApiResponse<User[]>> => {
+  getAllTeam: async (): Promise<ApiResponse<TeamMember[]>> => {
     try {
       const response = await apiClient.get('/team/all');
       return response.data;
@@ -293,7 +313,7 @@ export const teamAPI = {
     }
   },
 
-  addTeamMember: async (memberData: SignupData): Promise<ApiResponse<User>> => {
+  addTeamMember: async (memberData: Omit<TeamMember, '_id'>): Promise<ApiResponse<TeamMember>> => {
     try {
       const response = await apiClient.post('/team/add', memberData);
       return response.data;
@@ -302,7 +322,7 @@ export const teamAPI = {
     }
   },
 
-  updateTeamMember: async (id: string, memberData: Partial<User>): Promise<ApiResponse<User>> => {
+  updateTeamMember: async (id: string, memberData: Partial<TeamMember>): Promise<ApiResponse<TeamMember>> => {
     try {
       const response = await apiClient.put(`/team/update/${id}`, memberData);
       return response.data;
