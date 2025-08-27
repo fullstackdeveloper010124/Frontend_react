@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useSignup } from '@/hooks/useApi';
+import axios from 'axios';
+import { API_URLS } from '@/lib/api';
 
 type Role = 'admin' | 'manager' | 'employee';
 
@@ -68,7 +70,7 @@ const Signup: React.FC = () => {
     reset(); // clear previous errors
 
     try {
-      await executeSignup({
+      const signupResponse = await executeSignup({
         name: formData.name,
         fullName: formData.name, // for admin/manager signup
         phone: formData.phone,
@@ -79,7 +81,44 @@ const Signup: React.FC = () => {
         project: formData.project || undefined,
       });
 
-      toast({ title: 'Success', description: 'Account created successfully!' });
+      // Add the user to the team member table if signup is successful
+      let teamMemberAdded = false;
+      let teamMemberError = null;
+      
+      if (formData.role === 'employee') {
+        try {
+          // Generate a random employee ID
+          const employeeId = 'EMP' + Math.floor(1000 + Math.random() * 9000);
+          
+          await axios.post(API_URLS.teamAdd, {
+            employeeId: employeeId,
+            name: formData.name,
+            phone: formData.phone,
+            email: formData.email,
+            project: formData.project || '507f1f77bcf86cd799439011', // Default project ID
+            role: formData.role,
+            hoursThisWeek: 0,
+            status: 'Active'
+          });
+          teamMemberAdded = true;
+        } catch (teamError) {
+          console.error('Error adding to team table:', teamError);
+          teamMemberError = teamError;
+          // Don't fail the signup if team addition fails, just log it
+        }
+      }
+
+      if (teamMemberAdded) {
+        toast({ title: 'Success', description: 'Account created successfully and added to team!' });
+      } else if (teamMemberError) {
+        toast({ 
+          title: 'Account Created', 
+          description: 'Account created successfully, but there was an issue adding to team. Please contact administrator.',
+          variant: 'default'
+        });
+      } else {
+        toast({ title: 'Success', description: 'Account created successfully!' });
+      }
       navigate('/login');
     } catch (err: unknown) {
       console.error('Signup error:', err);
