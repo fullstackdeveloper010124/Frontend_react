@@ -166,6 +166,14 @@ export const authAPI = {
       
       // Format data according to backend expectations
       let formattedData;
+      const normalizeRole = (r: string | undefined): 'Admin' | 'Manager' | 'Employee' | undefined => {
+        if (!r) return undefined;
+        const lower = r.toLowerCase();
+        if (lower === 'admin') return 'Admin';
+        if (lower === 'manager') return 'Manager';
+        if (lower === 'employee') return 'Employee';
+        return undefined;
+      };
       
       if (userData.role === 'employee') {
         // TeamMember signup format
@@ -176,7 +184,8 @@ export const authAPI = {
           password: userData.password,
           confirmPassword: userData.confirmPassword,
           project: userData.project || '507f1f77bcf86cd799439011', // Default project ID if not provided
-          role: userData.role
+          // Ensure role matches backend enum
+          role: normalizeRole(userData.role) || 'Employee'
         };
       } else {
         // User signup format (admin/manager)
@@ -186,7 +195,8 @@ export const authAPI = {
           email: userData.email,
           password: userData.password,
           confirmPassword: userData.confirmPassword,
-          role: userData.role
+          // Ensure proper case for backend
+          role: normalizeRole(userData.role) || 'Manager'
         };
       }
       
