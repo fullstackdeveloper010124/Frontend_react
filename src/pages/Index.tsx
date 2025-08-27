@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLogin } from '@/hooks/useApi';
 
 type Role = 'employee' | 'admin' | 'manager';
 
@@ -33,7 +34,7 @@ const Login: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   // Rename `error` to avoid shadowing with catch variable
-  const { execute: executeLogin, loading, error: loginError, reset } = useLogin();
+  const { execute: executeLogin, loading, error: loginError, reset, data } = useLogin();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -49,7 +50,7 @@ const Login: React.FC = () => {
     reset(); // Reset any previous errors
 
     try {
-      const result = await executeLogin({
+      await executeLogin({
         email: formData.email,
         password: formData.password,
       });
@@ -67,7 +68,7 @@ const Login: React.FC = () => {
         manager: '/manager/dashboard',
       };
       
-      const userRole = result.data?.user?.role || 'employee';
+      const userRole = (data as any)?.user?.role || formData.role || 'employee';
       navigate(roleToPath[userRole] || '/employee/dashboard');
     } catch (error: any) {
       console.error("Login error:", error);
@@ -134,8 +135,8 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={submitting || isLoading}>
-              {submitting ? 'Signing In...' : 'Login'}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing In...' : 'Login'}
             </Button>
           </form>
 
