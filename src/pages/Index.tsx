@@ -7,28 +7,54 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { useLogin } from '@/hooks/useApi';
 
+type Role = 'employee' | 'admin' | 'manager';
 
-const Login = () => {
+const isRole = (v: string): v is Role =>
+  v === 'employee' || v === 'admin' || v === 'manager';
+
+const ensureErrorMessage = (err: unknown): string => {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Invalid credentials';
+  }
+};
+
+const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
+
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { execute: executeLogin, loading, error, reset } = useLogin();
+  // Rename `error` to avoid shadowing with catch variable
+  const { execute: executeLogin, loading, error: loginError, reset } = useLogin();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    reset(); // Reset any previous errors
+    // Optional basic validation to avoid bad requests
+    if (!formData.email.trim() || !formData.password.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Email and password are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    reset(); // Clear any previous errors
 
     try {
       const result = await executeLogin({
@@ -36,27 +62,29 @@ const Login = () => {
         password: formData.password,
       });
 
-      // The login hook will handle token storage and user data
       toast({
-        title: "Success",
-        description: "Logged in successfully!"
+        title: 'Success',
+        description: 'Logged in successfully!',
       });
 
-      // Navigate to role-specific dashboard based on user role
-      const roleToPath: Record<string, string> = {
+      // Map validated role to route
+      const roleToPath: Record<Role, string> = {
         employee: '/employee/dashboard',
         admin: '/admin/dashboard',
         manager: '/manager/dashboard',
       };
-      
-      const userRole = result.data?.user?.role || 'employee';
-      navigate(roleToPath[userRole] || '/employee/dashboard');
-    } catch (error: any) {
-      console.error("Login error:", error);
+
+      // Safely read role and narrow it to a known union
+      const rawRole = (result as any)?.data?.user?.role as string | undefined;
+      const role: Role = rawRole && isRole(rawRole) ? rawRole : 'employee';
+
+      navigate(roleToPath[role]);
+    } catch (err: unknown) {
+      console.error('Login error:', err);
       toast({
-        title: "Login Failed",
-        description: error.message || "Invalid credentials",
-        variant: "destructive"
+        title: 'Login Failed',
+        description: ensureErrorMessage(err),
+        variant: 'destructive',
       });
     }
   };
@@ -66,9 +94,7 @@ const Login = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>
-            Sign in to your TimeTracker account
-          </CardDescription>
+          <CardDescription>Sign in to your TimeTracker account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -98,9 +124,9 @@ const Login = () => {
               />
             </div>
 
-            {error && (
+            {loginError && (
               <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                {error}
+                {typeof loginError === 'string' ? loginError : 'Login failed'}
               </div>
             )}
 
@@ -116,7 +142,7 @@ const Login = () => {
           </div>
 
           <div className="mt-2 text-center text-sm">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link to="/signup" className="text-primary hover:underline">
               Sign up here
             </Link>
