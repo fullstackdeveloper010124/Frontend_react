@@ -168,6 +168,7 @@ export interface TeamMember {
   hoursThisWeek?: number;
   status?: string;
   role?: string;
+  isUser?: boolean; // Flag to identify if this came from User collection (signup)
 }
 
 // Authentication API functions

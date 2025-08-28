@@ -287,6 +287,70 @@ const Team = () => {
     });
   };
 
+  // Function to sync signup data with team members
+  const syncSignupData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch fresh data from both collections
+      const [membersRes, usersRes] = await Promise.all([
+        teamAPI.getAllTeam(),
+        fetch('http://localhost:5000/api/users').then(res => res.ok ? res.json() : [])
+      ]);
+      
+      let membersData = [];
+      if (membersRes && typeof membersRes === 'object') {
+        if (membersRes.data) {
+          membersData = membersRes.data;
+        } else if (Array.isArray(membersRes)) {
+          membersData = membersRes;
+        } else if ('members' in membersRes && Array.isArray((membersRes as any).members)) {
+          membersData = (membersRes as any).members;
+        }
+      }
+      
+      // Convert User data to TeamMember format
+      const convertedUsers = usersRes.map((user: any) => ({
+        _id: user._id,
+        employeeId: user.role === 'Admin' ? 'ADM001' : 'MGR001',
+        name: user.fullName || user.name,
+        project: 'N/A',
+        email: user.email,
+        phone: user.phone,
+        address: '',
+        bankName: '',
+        bankAddress: '',
+        accountHolder: '',
+        accountHolderAddress: '',
+        account: '',
+        accountType: '',
+        hoursThisWeek: 0,
+        status: 'Active',
+        role: user.role,
+        isUser: true
+      }));
+      
+      // Combine both collections
+      const combinedData = [...convertedUsers, ...membersData];
+      setTeamMembers(combinedData);
+      
+      toast({ 
+        title: 'Success', 
+        description: `Synced data: ${combinedData.length} total members` 
+      });
+      
+    } catch (err) {
+      console.error('Sync error:', err);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to sync signup data', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const totalHours = teamMembers.reduce((sum, m) => sum + (m.hoursThisWeek || 0), 0);
   const activeMembers = teamMembers.filter(m => m.status === 'Active').length;
   const avgHours = teamMembers.length > 0 ? (totalHours / teamMembers.length).toFixed(1) : '0';
@@ -362,6 +426,14 @@ const Team = () => {
                   title="Reorder existing employee IDs to be sequential"
                 >
                   Reorder IDs
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={syncSignupData}
+                  disabled={loading}
+                  title="Sync signup data with existing team members"
+                >
+                  Sync Signup Data
                 </Button>
                 <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
                   <DialogTrigger asChild>
@@ -627,8 +699,17 @@ const Team = () => {
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {teamMembers.map((member, idx) => (
                       <tr key={member._id || idx}>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.employeeId}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
+                                                 <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">
+                           <div className="flex items-center space-x-2">
+                             <span>{member.employeeId}</span>
+                             {member.isUser && (
+                               <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                                 Signup
+                               </span>
+                             )}
+                           </div>
+                         </td>
+                         <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             member.role === 'Admin'
