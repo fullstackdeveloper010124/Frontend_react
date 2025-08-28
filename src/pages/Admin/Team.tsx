@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/Sidebar/AdminSidebar';
 import { Header } from '@/components/navbar/AdminHeader';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import { Plus, Trash2, Edit } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {  Dialog,  DialogContent,  DialogHeader,  DialogTitle,  DialogTrigger,  DialogFooter} from '@/components/ui/dialog';
 import {  AlertDialog,  AlertDialogAction,  AlertDialogCancel,  AlertDialogContent,  AlertDialogDescription,  AlertDialogFooter,  AlertDialogHeader,  AlertDialogTitle, AlertDialogTrigger,} from '@/components/ui/alert-dialog';
@@ -40,6 +40,9 @@ const Team = () => {
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const [newMember, setNewMember] = useState<NewMember>({
     employeeId: '',
     name: '',
@@ -62,26 +65,93 @@ const Team = () => {
 
   useEffect(() => {
     if (isAddMemberOpen) {
-      const randomId = 'EMP' + Math.floor(1000 + Math.random() * 9000);
-      setNewMember(prev => ({ ...prev, employeeId: randomId }));
+      // Generate sequential employee ID based on existing members
+      const existingIds = teamMembers.map(member => {
+        const idMatch = member.employeeId?.match(/EMP(\d+)/);
+        return idMatch ? parseInt(idMatch[1]) : 0;
+      });
+      
+      const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+      const sequentialId = 'EMP' + String(nextId).padStart(3, '0');
+      
+      setNewMember(prev => ({ ...prev, employeeId: sequentialId }));
     }
-  }, [isAddMemberOpen]);
+  }, [isAddMemberOpen, teamMembers]);
 
   useEffect(() => {
     const fetchMembersAndProjects = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
+        console.log('Fetching team members and projects...');
+        
         // Fetch team members
         const membersRes = await teamAPI.getAllTeam();
-        setTeamMembers(membersRes.data || []);
+        console.log('Team members response:', membersRes);
+        console.log('Response type:', typeof membersRes);
+        console.log('Response keys:', Object.keys(membersRes));
+        
+        // Handle different response formats
+        let membersData = [];
+        if (membersRes && typeof membersRes === 'object') {
+          if (membersRes.data) {
+            membersData = membersRes.data;
+          } else if (Array.isArray(membersRes)) {
+            membersData = membersRes;
+          } else if ('members' in membersRes && Array.isArray((membersRes as any).members)) {
+            membersData = (membersRes as any).members;
+          } else if (membersRes.message) {
+            // If it's just a message response, try to get data from response body
+            console.log('Got message response, checking response body...');
+          }
+        }
+        
+        console.log('Processed members data:', membersData);
+        setTeamMembers(membersData);
 
         // Fetch projects
         const projectsRes = await projectAPI.getAllProjects();
-        setProjects(projectsRes.data || []);
-      } catch (err) {
+        console.log('Projects response:', projectsRes);
+        console.log('Projects response type:', typeof projectsRes);
+        console.log('Projects response keys:', Object.keys(projectsRes));
+        
+        // Handle different response formats for projects
+        let projectsData = [];
+        if (projectsRes && typeof projectsRes === 'object') {
+          if (projectsRes.data) {
+            projectsData = projectsRes.data;
+          } else if (Array.isArray(projectsRes)) {
+            projectsData = projectsRes;
+          } else if ('projects' in projectsRes && Array.isArray((projectsRes as any).projects)) {
+            projectsData = (projectsRes as any).projects;
+          }
+        }
+        
+        console.log('Processed projects data:', projectsData);
+        setProjects(projectsData);
+        
+      } catch (err: any) {
         console.error('Fetch Error:', err);
-        toast({ title: 'Error', description: 'Failed to fetch data', variant: 'destructive' });
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response,
+          status: err.response?.status,
+          data: err.response?.data
+        });
+        
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to fetch data';
+        setError(errorMessage);
+        toast({ 
+          title: 'Error', 
+          description: errorMessage, 
+          variant: 'destructive' 
+        });
+      } finally {
+        setLoading(false);
       }
     };
+    
     fetchMembersAndProjects();
   }, [toast]);
 
@@ -204,10 +274,70 @@ const Team = () => {
     }
   };
 
+  // Function to reorder employee IDs to be sequential
+  const reorderEmployeeIds = () => {
+    const reorderedMembers = teamMembers.map((member, index) => ({
+      ...member,
+      employeeId: 'EMP' + String(index + 1).padStart(3, '0')
+    }));
+    setTeamMembers(reorderedMembers);
+    toast({ 
+      title: 'Success', 
+      description: 'Employee IDs have been reordered sequentially' 
+    });
+  };
 
   const totalHours = teamMembers.reduce((sum, m) => sum + (m.hoursThisWeek || 0), 0);
   const activeMembers = teamMembers.filter(m => m.status === 'Active').length;
   const avgHours = teamMembers.length > 0 ? (totalHours / teamMembers.length).toFixed(1) : '0';
+
+  // Show loading state
+  if (loading) {
+    return (
+      <ThemeProvider>
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <div className="flex-1 overflow-auto">
+            <Header onMenuClick={() => setSidebarOpen(true)} />
+            <main className="p-6">
+              <div className="flex items-center justify-center p-8">
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="animate-spin h-8 w-8 text-indigo-600" />
+                  <span className="text-lg">Loading team data...</span>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <ThemeProvider>
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <div className="flex-1 overflow-auto">
+            <Header onMenuClick={() => setSidebarOpen(true)} />
+            <main className="p-6">
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <strong className="font-bold">Error:</strong>
+                <span className="block sm:inline"> {error}</span>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="ml-2 bg-red-600 text-white px-2 py-1 rounded text-sm hover:bg-red-700"
+                >
+                  Retry
+                </button>
+              </div>
+            </main>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
 
   return (
     <ThemeProvider>
@@ -220,14 +350,26 @@ const Team = () => {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Team</h1>
                 <p className="text-gray-600 dark:text-gray-400">Manage your team members and track their activity</p>
+                {teamMembers.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-1">Found {teamMembers.length} team member(s)</p>
+                )}
               </div>
-              <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-                <DialogTrigger asChild>
-                  <Button className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white">
-                    <Plus className="w-4 h-4" />
-                    <span>Add Member</span>
-                  </Button>
-                </DialogTrigger>
+              <div className="flex space-x-2">
+                <Button 
+                  variant="outline"
+                  onClick={reorderEmployeeIds}
+                  disabled={teamMembers.length === 0}
+                  title="Reorder existing employee IDs to be sequential"
+                >
+                  Reorder IDs
+                </Button>
+                <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white">
+                      <Plus className="w-4 h-4" />
+                      <span>Add Member</span>
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Team Member</DialogTitle>
@@ -427,10 +569,11 @@ const Team = () => {
                       </Button>
                       <Button onClick={handleAddMember}>Add Member</Button>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
+                                       </div>
+                   </DialogContent>
+                 </Dialog>
+               </div>
+             </div>
 
             {/* Team Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
@@ -452,86 +595,96 @@ const Team = () => {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-900/40">
-                  <tr>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">ID</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Name</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Role</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Project</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Email</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Phone</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Address</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Bank</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Holder</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Type</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Hours</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
-                    <th className="px-6 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {teamMembers.map((member, idx) => (
-                    <tr key={idx}>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.employeeId}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          member.role === 'Admin'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400'
-                            : member.role === 'Manager'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                        }`}>
-                          {member.role || 'Employee'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                        {member.project ? (typeof member.project === 'string' ? member.project : member.project.name) : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.phone}</td>
-                      <td className="px-6 py-4 max-w-xs text-gray-600 dark:text-gray-300 truncate">{member.address}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.bankName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountHolder}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.account}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountType}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.hoursThisWeek || 0}h</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          member.status === 'Active'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                            : member.status === 'Leave'
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                        }`}>
-                          {member.status || 'Active'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mr-2"
-                          onClick={() => openEditModal(member)}
-                        >
-                          <Edit className="w-4 h-4 mr-1" /> Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => confirmDelete(member._id)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" /> Delete
-                        </Button>
-                      </td>
+            {/* Show message if no team members */}
+            {teamMembers.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <p className="text-gray-500 dark:text-gray-400 mb-4">No team members found.</p>
+                <Button onClick={() => setIsAddMemberOpen(true)}>
+                  Add Your First Team Member
+                </Button>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-900/40">
+                    <tr>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">ID</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Name</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Role</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-400">Project</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Email</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Phone</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Address</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Bank</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Holder</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Type</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Hours</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
+                      <th className="px-6 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {teamMembers.map((member, idx) => (
+                      <tr key={member._id || idx}>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.employeeId}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            member.role === 'Admin'
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400'
+                              : member.role === 'Manager'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                          }`}>
+                            {member.role || 'Employee'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                          {member.project ? (typeof member.project === 'string' ? member.project : member.project.name) : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.email}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.phone}</td>
+                        <td className="px-6 py-4 max-w-xs text-gray-600 dark:text-gray-300 truncate">{member.address}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.bankName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountHolder}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.account}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountType}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.hoursThisWeek || 0}h</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            member.status === 'Active'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                              : member.status === 'Leave'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
+                              : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                          }`}>
+                            {member.status || 'Active'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mr-2"
+                            onClick={() => openEditModal(member)}
+                          >
+                            <Edit className="w-4 h-4 mr-1" /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => confirmDelete(member._id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" /> Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </main>
         </div>
       </div>

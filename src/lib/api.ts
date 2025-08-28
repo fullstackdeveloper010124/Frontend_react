@@ -122,11 +122,20 @@ export interface SignupData {
 export interface Project {
   _id: string;
   name: string;
+  client: string;
   description: string;
-  status: 'active' | 'completed' | 'on-hold';
   startDate: string;
   endDate?: string;
-  assignedTeam: string[];
+  deadline?: string;
+  progress: number;
+  team: number;
+  hours: number;
+  status: 'active' | 'completed' | 'on-hold' | 'In Progress';
+  assignedTeam: TeamMember[];
+  budget: number;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Leave Application types
@@ -307,8 +316,25 @@ export const teamAPI = {
   getAllTeam: async (): Promise<ApiResponse<TeamMember[]>> => {
     try {
       const response = await apiClient.get('/team/all');
-      return response.data;
+      console.log('Raw team response:', response);
+      
+      // Handle different response formats
+      let data = response.data;
+      if (Array.isArray(data)) {
+        // Backend returns array directly
+        return { success: true, data };
+      } else if (data && data.data) {
+        // Backend returns wrapped data
+        return { success: true, data: data.data };
+      } else if (data && data.members) {
+        // Backend returns with 'members' key
+        return { success: true, data: data.members };
+      } else {
+        // Fallback to original response
+        return response.data;
+      }
     } catch (error) {
+      console.error('Team API error:', error);
       throw error;
     }
   },
@@ -316,8 +342,10 @@ export const teamAPI = {
   addTeamMember: async (memberData: Omit<TeamMember, '_id'>): Promise<ApiResponse<TeamMember>> => {
     try {
       const response = await apiClient.post('/team/add', memberData);
+      console.log('Add team member response:', response);
       return response.data;
     } catch (error) {
+      console.error('Add team member error:', error);
       throw error;
     }
   },
@@ -325,8 +353,10 @@ export const teamAPI = {
   updateTeamMember: async (id: string, memberData: Partial<TeamMember>): Promise<ApiResponse<TeamMember>> => {
     try {
       const response = await apiClient.put(`/team/update/${id}`, memberData);
+      console.log('Update team member response:', response);
       return response.data;
     } catch (error) {
+      console.error('Update team member error:', error);
       throw error;
     }
   },
@@ -334,8 +364,10 @@ export const teamAPI = {
   deleteTeamMember: async (id: string): Promise<ApiResponse> => {
     try {
       const response = await apiClient.delete(`/team/delete/${id}`);
+      console.log('Delete team member response:', response);
       return response.data;
     } catch (error) {
+      console.error('Delete team member error:', error);
       throw error;
     }
   },
@@ -361,18 +393,34 @@ export const projectAPI = {
     }
   },
 
-  createProject: async (projectData: Omit<Project, '_id'>): Promise<ApiResponse<Project>> => {
+  createProject: async (projectData: Omit<Project, '_id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Project>> => {
     try {
-      const response = await apiClient.post('/projects', projectData);
+      // Transform the data to match backend expectations
+      const transformedData = {
+        ...projectData,
+        startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : new Date().toISOString(),
+        endDate: projectData.endDate ? new Date(projectData.endDate).toISOString() : undefined,
+        deadline: projectData.deadline ? new Date(projectData.deadline).toISOString() : undefined,
+      };
+      
+      const response = await apiClient.post('/projects', transformedData);
       return response.data;
     } catch (error) {
       throw error;
     }
   },
 
-  updateProject: async (id: string, projectData: Partial<Project>): Promise<ApiResponse<Project>> => {
+  updateProject: async (id: string, projectData: Partial<Omit<Project, '_id' | 'createdAt' | 'updatedAt'>>): Promise<ApiResponse<Project>> => {
     try {
-      const response = await apiClient.put(`/projects/${id}`, projectData);
+      // Transform the data to match backend expectations
+      const transformedData = {
+        ...projectData,
+        startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : undefined,
+        endDate: projectData.endDate ? new Date(projectData.endDate).toISOString() : undefined,
+        deadline: projectData.deadline ? new Date(projectData.deadline).toISOString() : undefined,
+      };
+      
+      const response = await apiClient.put(`/projects/${id}`, transformedData);
       return response.data;
     } catch (error) {
       throw error;
