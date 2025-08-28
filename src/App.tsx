@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
 import Index from '@/pages/Index';
 import AdminDashboard from '@/pages/Admin/Dashboard';
 import AdminTimesheets from '@/pages/Admin/Timesheets';
@@ -37,6 +38,9 @@ const App = () => {
         <Route path="/signup" element={<Signup />} />
         <Route path="/test" element={<TestPage />} />
 
+        {/* Debug route */}
+        <Route path="/test-leave" element={<EmployeeLeaveApplication />} />
+
         {/* Dashboard routes */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/timesheets" element={<AdminTimesheets />} />
@@ -72,6 +76,7 @@ const App = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </BrowserRouter>
+      <Toaster />
     </AuthProvider>
   );
 };

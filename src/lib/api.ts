@@ -141,13 +141,23 @@ export interface Project {
 // Leave Application types
 export interface LeaveApplication {
   _id: string;
-  employeeId: string;
-  leaveType: 'sick' | 'casual' | 'annual' | 'other';
-  startDate: string;
-  endDate: string;
-  reason: string;
+  employeeName: string;
+  supervisorName: string;
+  department: string;
+  leaveDate: string;
+  leaveTime: string;
+  leaveType: string;
+  duration: string;
+  selectedReasons: string[];
+  otherReason: string;
+  description: string;
+  emergencyContact: string;
+  emergencyPhone: string;
   status: 'pending' | 'approved' | 'rejected';
-  appliedDate: string;
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  comments?: string;
 }
 
 // TeamMember interface
@@ -458,18 +468,37 @@ export const leaveAPI = {
     }
   },
 
-  applyLeave: async (leaveData: Omit<LeaveApplication, '_id' | 'status' | 'appliedDate'>): Promise<ApiResponse<LeaveApplication>> => {
+  applyLeave: async (leaveData: Omit<LeaveApplication, '_id' | 'status' | 'submittedAt'>): Promise<ApiResponse<LeaveApplication>> => {
     try {
-      const response = await apiClient.post('/leave/apply', leaveData);
+      const response = await apiClient.post('/leave', leaveData);
       return response.data;
     } catch (error) {
       throw error;
     }
   },
 
-  updateLeaveStatus: async (id: string, status: 'approved' | 'rejected'): Promise<ApiResponse<LeaveApplication>> => {
+  updateLeaveStatus: async (id: string, status: 'approved' | 'rejected', comments?: string, reviewedBy?: string): Promise<ApiResponse<LeaveApplication>> => {
     try {
-      const response = await apiClient.put(`/leave/${id}/status`, { status });
+      const response = await apiClient.put(`/leave/${id}/status`, { status, comments, reviewedBy });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get leave applications with filters
+  getFilteredLeaveApplications: async (filters: {
+    status?: string;
+    department?: string;
+    employeeName?: string;
+  }): Promise<ApiResponse<LeaveApplication[]>> => {
+    try {
+      const queryParams = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value);
+      });
+      
+      const response = await apiClient.get(`/leave?${queryParams.toString()}`);
       return response.data;
     } catch (error) {
       throw error;
