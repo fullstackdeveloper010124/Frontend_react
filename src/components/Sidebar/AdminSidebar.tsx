@@ -17,7 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { icon: FileText, label: 'Projects', href: '/admin/projects' },
     { icon: Users, label: 'Team', href: '/admin/team' },
     { icon: BarChart3, label: 'Reports', href: '/admin/reports' },
-    { icon: ClipboardList, label: 'Leave Application', href: '/admin/leave-application' },
+    { icon: ClipboardList, label: 'Leave Management', href: '/admin/leave-application' },
     { icon: ClipboardList, label: 'Invoice', href: '/admin/invoice' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
   ];

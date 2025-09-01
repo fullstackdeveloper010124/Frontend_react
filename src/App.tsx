@@ -16,12 +16,12 @@ import ManagerProjects from '@/pages/Manager/Projects';
 import ManagerTeam from '@/pages/Manager/Team';
 import ManagerReports from '@/pages/Manager/Reports';
 import ManagerSettings from '@/pages/Manager/Settings';
+import ManagerLeaveApplication from '@/pages/Manager/LeaveApplication';
 import ManagerNotFound from '@/pages/Manager/NotFound';
 import EmployeeDashboard from '@/pages/Employee/Dashboard';
 import EmployeeLeaveApplication from '@/pages/Employee/LeaveApplication';
 
 // New: import Login and Signup
-import Login from '@/pages/Index';
 import Signup from '@/pages/Signup';
 import TestPage from '@/pages/TestPage';
 
@@ -34,7 +34,7 @@ const App = () => {
         <Route path="/" element={<Index />} />
 
         {/* Auth routes */}
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<Index />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/test" element={<TestPage />} />
 
@@ -57,7 +57,7 @@ const App = () => {
         <Route path="/manager/team" element={<ManagerTeam />} />
         <Route path="/manager/reports" element={<ManagerReports />} />
         <Route path="/manager/settings" element={<ManagerSettings />} />
-        <Route path="/manager/leave-application" element={<ManagerNotFound />} />
+        <Route path="/manager/leave-application" element={<ManagerLeaveApplication />} />
         <Route path="/manager/invoice" element={<ManagerNotFound />} />
 
         <Route path="/employee/dashboard" element={<EmployeeDashboard />} />

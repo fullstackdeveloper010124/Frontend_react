@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
 import { Menu, Search, Bell, Sun, Moon, LogOut } from 'lucide-react';
-import { useTheme } from '@/components/New folder/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -12,10 +11,10 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
-  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(3);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -32,6 +31,10 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       title: "Notifications",
       description: "You have 3 new notifications."
     });
+  };
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
   return (

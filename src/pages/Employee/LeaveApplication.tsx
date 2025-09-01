@@ -210,13 +210,13 @@ const LeaveApplication = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       
       <div className="w-full">
         <Header onMenuClick={() => setIsSidebarOpen(true)} />
         
-        <main className="p-6 max-w-4xl mx-auto">
+        <main className="p-6  mx-auto">
           {/* Header Section */}
           <div className="mb-8 text-center">
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
