@@ -141,29 +141,34 @@ const LeaveApplication = () => {
         emergencyPhone: formData.emergencyPhone
       };
 
-      // For now, just show success message
-      console.log('Form data:', submitData);
+      // Call the API to submit leave application
+      const response = await leaveAPI.applyLeave(submitData);
       
-      setShowSuccess(true);
+      if (response.success) {
+        console.log('Leave application submitted successfully:', response.data);
+        setShowSuccess(true);
 
-      // Reset form
-      setFormData({
-        employeeName: formData.employeeName, // Keep employee name
-        department: formData.department, // Keep department
-        supervisorName: '',
-        leaveDate: '',
-        leaveTime: '',
-        leaveType: '',
-        duration: '',
-        selectedReasons: [],
-        otherReason: '',
-        description: '',
-        emergencyContact: '',
-        emergencyPhone: ''
-      });
+        // Reset form
+        setFormData({
+          employeeName: formData.employeeName, // Keep employee name
+          department: formData.department, // Keep department
+          supervisorName: '',
+          leaveDate: '',
+          leaveTime: '',
+          leaveType: '',
+          duration: '',
+          selectedReasons: [],
+          otherReason: '',
+          description: '',
+          emergencyContact: '',
+          emergencyPhone: ''
+        });
 
-      // Hide success message after 5 seconds
-      setTimeout(() => setShowSuccess(false), 5000);
+        // Hide success message after 5 seconds
+        setTimeout(() => setShowSuccess(false), 5000);
+      } else {
+        throw new Error(response.message || 'Failed to submit leave request');
+      }
       
     } catch (error) {
       console.error('Submit error:', error);
