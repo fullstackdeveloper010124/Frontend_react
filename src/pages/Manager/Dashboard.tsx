@@ -21,6 +21,7 @@ const Index = () => {
       time: "3:30:00", 
       status: "In Progress", 
       billable: true, 
+      employeeName: "Sarah Johnson",
       date: new Date(),
       description: "Working on the hero section and navigation"
     },
@@ -31,6 +32,7 @@ const Index = () => {
       time: "2:00:00", 
       status: "Completed", 
       billable: true, 
+      employeeName: "Mike Chen",
       date: new Date(),
       description: "Integrated user authentication endpoints"
     },
@@ -41,6 +43,7 @@ const Index = () => {
       time: "1:30:00", 
       status: "Pending", 
       billable: false, 
+      employeeName: "Emily Davis",
       date: new Date(),
       description: "Setting up Google Ads campaign"
     },
@@ -51,6 +54,7 @@ const Index = () => {
       time: "0:30:00", 
       status: "Completed", 
       billable: false, 
+      employeeName: "Alex Rodriguez",
       date: new Date(),
       description: "Weekly team standup meeting"
     }

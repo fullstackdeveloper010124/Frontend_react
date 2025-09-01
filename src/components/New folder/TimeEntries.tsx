@@ -60,9 +60,10 @@ export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onU
           </div>
         </div>
 
-        <div className="hidden md:grid grid-cols-6 gap-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+        <div className="hidden md:grid grid-cols-7 gap-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
           <div>Project</div>
           <div>Task</div>
+          <div>Employee</div>
           <div>Time</div>
           <div>Status</div>
           <div>Billable</div>
@@ -73,20 +74,26 @@ export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onU
           {entries.map((entry) => (
             <div 
               key={entry.id} 
-              className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="grid grid-cols-1 md:grid-cols-7 gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="md:col-span-1">
                 <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {entry.project}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 md:hidden">
-                  {entry.task}
+                  {entry.task} • {entry.employeeName || entry.assignedTo || 'Unassigned'}
                 </div>
               </div>
               
               <div className="hidden md:block">
                 <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
                   {entry.task}
+                </div>
+              </div>
+              
+              <div className="hidden md:block">
+                <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                  {entry.employeeName || entry.assignedTo || 'Unassigned'}
                 </div>
               </div>
               

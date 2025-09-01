@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { projectAPI } from '@/lib/api';
 
 interface TimeTrackerProps {
   onAddEntry: (entry: any) => void;
@@ -23,14 +24,8 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   const [manualTime, setManualTime] = useState('');
   const [isManualEntry, setIsManualEntry] = useState(false);
   const [timeframeTab, setTimeframeTab] = useState('hourly');
-
-  const projects = [
-    'Website Redesign',
-    'Mobile App',
-    'Marketing Campaign',
-    'Internal Training',
-    'Client Consultation'
-  ];
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const tasks = [
     'Design',
@@ -38,8 +33,57 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
     'Testing',
     'Meeting',
     'Documentation',
-    'Research'
+    'Research',
+    'Planning',
+    'Code Review',
+    'Bug Fix',
+    'Deployment'
   ];
+
+  // Fetch projects on component mount
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching projects...');
+        const response = await projectAPI.getAllProjects();
+        console.log('Projects API response:', response);
+        
+        if (response && response.data && Array.isArray(response.data)) {
+          console.log('Setting projects from API:', response.data);
+          setProjects(response.data);
+        } else if (response && Array.isArray(response)) {
+          console.log('Setting projects from direct array:', response);
+          setProjects(response);
+        } else {
+          console.log('Using fallback projects');
+          // Fallback to default projects if API fails
+          setProjects([
+            { _id: '1', name: 'Website Redesign' },
+            { _id: '2', name: 'Mobile App' },
+            { _id: '3', name: 'Marketing Campaign' },
+            { _id: '4', name: 'Internal Training' },
+            { _id: '5', name: 'Client Consultation' }
+          ]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+        console.log('Using fallback projects due to error');
+        // Fallback to default projects
+        setProjects([
+          { _id: '1', name: 'Website Redesign' },
+          { _id: '2', name: 'Mobile App' },
+          { _id: '3', name: 'Marketing Campaign' },
+          { _id: '4', name: 'Internal Training' },
+          { _id: '5', name: 'Client Consultation' }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -59,12 +103,12 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   };
 
   const startTimer = () => {
-    if (!project || !task) {
-      alert('Please select a project and task before starting the timer');
-      return;
-    }
     setIsRunning(true);
-    setActiveTimer({ project, task, startTime: Date.now() });
+    setActiveTimer({ 
+      project: project || 'General Work', 
+      task: task || 'Unassigned Task', 
+      startTime: Date.now() 
+    });
   };
 
   const pauseTimer = () => {
@@ -72,11 +116,11 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   };
 
   const stopTimer = () => {
-    if (elapsed > 0 && project && task) {
+    if (elapsed > 0) {
       const timeString = formatTime(elapsed);
       onAddEntry({
-        project,
-        task,
+        project: project || 'General Work',
+        task: task || 'Unassigned Task',
         time: timeString,
         status: 'Completed',
         billable,
@@ -91,14 +135,14 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   };
 
   const saveManualEntry = () => {
-    if (!project || !task || !manualTime) {
-      alert('Please fill in all required fields');
+    if (!manualTime) {
+      alert('Please enter the time duration');
       return;
     }
     
     onAddEntry({
-      project,
-      task,
+      project: project || 'General Work',
+      task: task || 'Unassigned Task',
       time: manualTime,
       status: 'Completed',
       billable,
@@ -179,23 +223,31 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Project *
+              Project
             </label>
             <Select value={project} onValueChange={setProject}>
               <SelectTrigger>
-                <SelectValue placeholder="Select project" />
+                <SelectValue placeholder={loading ? "Loading projects..." : "Select project"} />
               </SelectTrigger>
               <SelectContent>
-                {projects.map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                ))}
+                {projects.length > 0 ? (
+                  projects.map(p => (
+                    <SelectItem key={p._id || p.name || p} value={p.name || p}>
+                      {p.name || p} {p.client ? `(${p.client})` : ''}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-projects" disabled>
+                    No projects available
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Task *
+              Task
             </label>
             <Select value={task} onValueChange={setTask}>
               <SelectTrigger>

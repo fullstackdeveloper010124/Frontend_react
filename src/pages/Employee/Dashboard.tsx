@@ -21,13 +21,14 @@ const Index = () => {
       time: '3:30:00', 
       status: 'In Progress', 
       billable: true, 
+      employeeName: 'John Smith',
       date: new Date(),
       description: 'Working on the hero section and navigation'
     },
   ]);
 
   const addTimeEntry = (entry) => {
-    setTimeEntries(prev => [...prev, { ...entry, id: Date.now(), date: new Date() }]);
+    setTimeEntries(prev => [...prev, { ...entry, id: Date.now(), date: new Date(), employeeName: entry.employeeName }]);
   };
 
   const deleteTimeEntry = (id) => {
