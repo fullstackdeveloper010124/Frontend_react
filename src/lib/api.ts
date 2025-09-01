@@ -1,7 +1,10 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
 // Centralized API URLs for the project
-const API_BASE_URL = "https://timesheetsbackend.myadminbuddy.com/api"; // Live backend URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.MODE === 'development' 
+    ? "http://localhost:5000/api" 
+    : "https://timesheetsbackend.myadminbuddy.com/api");
 
 export const API_URLS = {
   // Auth endpoints

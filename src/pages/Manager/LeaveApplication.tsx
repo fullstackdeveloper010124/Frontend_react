@@ -12,6 +12,7 @@ import { CheckCircle, XCircle, Eye, Filter, Search, Calendar, User, Clock, FileT
 import { Sidebar } from '@/components/Sidebar/ManagerSidebar';
 import { Header } from '@/components/navbar/ManagerHeader';
 import { useToast } from '@/hooks/use-toast';
+import { leaveAPI } from '@/lib/api';
 
 interface LeaveApplication {
   _id: string;
@@ -43,34 +44,35 @@ const LeaveApplication = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Mock data for demonstration
+  // Fetch real leave applications from API
   useEffect(() => {
-    const mockApplications: LeaveApplication[] = [
-      {
-        _id: '1',
-        employeeName: 'John Smith',
-        supervisorName: 'Manager Name',
-        department: 'Engineering',
-        leaveDate: '2024-01-15',
-        leaveTime: '09:00',
-        leaveType: 'sick',
-        duration: 'full-day',
-        selectedReasons: ['Medical Appointment'],
-        otherReason: '',
-        description: 'Doctor appointment for routine checkup',
-        status: 'pending',
-        submittedAt: '2024-01-10T10:30:00Z'
+    const fetchLeaveApplications = async () => {
+      try {
+        setIsLoading(true);
+        const response = await leaveAPI.getAllLeaveApplications();
+        
+        if (response.success && response.data) {
+          setApplications(response.data);
+        } else {
+          console.error('Failed to fetch leave applications:', response);
+          toast({
+            title: "Error",
+            description: "Failed to load leave applications"
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching leave applications:', error);
+        toast({
+          title: "Error",
+          description: "Failed to connect to server"
+        });
+      } finally {
+        setIsLoading(false);
       }
-    ];
+    };
 
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setApplications(mockApplications);
-      setIsLoading(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, []);
+    fetchLeaveApplications();
+  }, [toast]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -103,31 +105,44 @@ const LeaveApplication = () => {
 
   const handleStatusUpdate = async (applicationId: string, newStatus: 'approved' | 'rejected') => {
     try {
-      // Mock API call
-      console.log('Updating status:', { applicationId, newStatus, comments: reviewComments });
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const reviewerName = user.name || user.fullName || 'Manager';
       
-      setApplications(prev => 
-        prev.map(app => 
-          app._id === applicationId 
-            ? { 
-                ...app, 
-                status: newStatus, 
-                reviewedBy: 'Manager Name',
-                reviewedAt: new Date().toISOString(),
-                comments: reviewComments
-              }
-            : app
-        )
+      const response = await leaveAPI.updateLeaveStatus(
+        applicationId, 
+        newStatus, 
+        reviewComments,
+        reviewerName
       );
+      
+      if (response.success) {
+        // Update local state
+        setApplications(prev => 
+          prev.map(app => 
+            app._id === applicationId 
+              ? { 
+                  ...app, 
+                  status: newStatus, 
+                  reviewedBy: reviewerName,
+                  reviewedAt: new Date().toISOString(),
+                  comments: reviewComments
+                }
+              : app
+          )
+        );
 
-      toast({
-        title: "Status Updated",
-        description: `Leave application has been ${newStatus}.`
-      });
+        toast({
+          title: "Status Updated",
+          description: `Leave application has been ${newStatus}.`
+        });
 
-      setSelectedApplication(null);
-      setReviewComments('');
+        setSelectedApplication(null);
+        setReviewComments('');
+      } else {
+        throw new Error(response.message || 'Failed to update status');
+      }
     } catch (error) {
+      console.error('Error updating status:', error);
       toast({
         title: "Error",
         description: "Failed to update leave application status."

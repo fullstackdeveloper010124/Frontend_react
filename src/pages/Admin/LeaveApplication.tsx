@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Sidebar } from '@/components/Sidebar/AdminSidebar';
 import { Header } from '@/components/navbar/AdminHeader';
-import { API_URLS } from '@/lib/api';
+import { API_URLS, leaveAPI } from '@/lib/api';
 
 interface LeaveApplication {
   _id: string;
@@ -50,6 +50,11 @@ const LeaveApplication = () => {
   const [department, setDepartment] = useState('');
   const [leaveDate, setLeaveDate] = useState<Date>();
   const [leaveTime, setLeaveTime] = useState('');
+  const [leaveType, setLeaveType] = useState('');
+  const [duration, setDuration] = useState('');
+  const [description, setDescription] = useState('');
+  const [emergencyContact, setEmergencyContact] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
   const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
   const [otherReason, setOtherReason] = useState('');
   
@@ -75,70 +80,35 @@ const LeaveApplication = () => {
     'Jury Duty'
   ];
 
-  // Mock data for review section
+  // Fetch real leave applications from API
   useEffect(() => {
-    const mockApplications: LeaveApplication[] = [
-      {
-        _id: '1',
-        employeeName: 'John Smith',
-        supervisorName: 'Manager Name',
-        department: 'Engineering',
-        leaveDate: '2024-01-15',
-        leaveTime: '09:00',
-        leaveType: 'sick',
-        duration: 'full-day',
-        selectedReasons: ['Medical Appointment'],
-        otherReason: '',
-        description: 'Doctor appointment for routine checkup',
-        status: 'pending',
-        submittedAt: '2024-01-10T10:30:00Z'
-      },
-      {
-        _id: '2',
-        employeeName: 'Sarah Johnson',
-        supervisorName: 'Manager Name',
-        department: 'Marketing',
-        leaveDate: '2024-01-20',
-        leaveTime: '08:00',
-        leaveType: 'vacation',
-        duration: 'multiple-days',
-        selectedReasons: ['Travel', 'Rest and Relaxation'],
-        otherReason: '',
-        description: 'Family vacation to Hawaii',
-        status: 'approved',
-        submittedAt: '2024-01-08T14:20:00Z',
-        reviewedBy: 'Admin Name',
-        reviewedAt: '2024-01-09T09:15:00Z',
-        comments: 'Approved. Enjoy your vacation!'
-      },
-      {
-        _id: '3',
-        employeeName: 'Mike Wilson',
-        supervisorName: 'Manager Name',
-        department: 'Sales',
-        leaveDate: '2024-01-12',
-        leaveTime: '13:00',
-        leaveType: 'personal',
-        duration: 'half-day',
-        selectedReasons: ['Personal Matters'],
-        otherReason: 'Family event',
-        description: 'Attending family wedding ceremony',
-        status: 'rejected',
-        submittedAt: '2024-01-11T16:45:00Z',
-        reviewedBy: 'Admin Name',
-        reviewedAt: '2024-01-11T17:00:00Z',
-        comments: 'Too short notice. Please submit requests at least 48 hours in advance.'
+    const fetchLeaveApplications = async () => {
+      try {
+        setIsLoading(true);
+        const response = await leaveAPI.getAllLeaveApplications();
+        
+        if (response.success && response.data) {
+          setApplications(response.data);
+        } else {
+          console.error('Failed to fetch leave applications:', response);
+          toast({
+            title: "Error",
+            description: "Failed to load leave applications"
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching leave applications:', error);
+        toast({
+          title: "Error",
+          description: "Failed to connect to server"
+        });
+      } finally {
+        setIsLoading(false);
       }
-    ];
+    };
 
-    // Simulate loading
-    const timer = setTimeout(() => {
-      setApplications(mockApplications);
-      setIsLoading(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, []);
+    fetchLeaveApplications();
+  }, [toast]);
 
   const handleReasonChange = (reason: string, checked: boolean) => {
     if (checked) {
@@ -157,22 +127,19 @@ const LeaveApplication = () => {
       department,
       leaveDate: leaveDate ? leaveDate.toISOString().split("T")[0] : "",
       leaveTime,
+      leaveType,
+      duration,
       selectedReasons,
-      otherReason
+      otherReason,
+      description,
+      emergencyContact,
+      emergencyPhone
     };
 
     try {
-      const response = await fetch(API_URLS.leave, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(formData)
-      });
+      const response = await leaveAPI.applyLeave(formData);
 
-      const result = await response.json();
-
-      if (response.ok) {
+      if (response.success) {
         toast({
           title: "Leave Request Submitted",
           description: "Your leave request has been submitted successfully. HR will contact you shortly."
@@ -184,10 +151,15 @@ const LeaveApplication = () => {
         setDepartment('');
         setLeaveDate(undefined);
         setLeaveTime('');
+        setLeaveType('');
+        setDuration('');
+        setDescription('');
+        setEmergencyContact('');
+        setEmergencyPhone('');
         setSelectedReasons([]);
         setOtherReason('');
       } else {
-        toast({ title: "Error", description: result.error || "Submission failed" });
+        toast({ title: "Error", description: response.message || "Submission failed" });
       }
     } catch (error) {
       toast({ title: "Error", description: "Network or server error" });
@@ -226,30 +198,50 @@ const LeaveApplication = () => {
 
   const handleStatusUpdate = async (applicationId: string, newStatus: 'approved' | 'rejected') => {
     try {
-      console.log('Updating status:', { applicationId, newStatus, comments: reviewComments });
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const reviewerName = user.name || user.fullName || 'Admin';
       
-      setApplications(prev => 
-        prev.map(app => 
-          app._id === applicationId 
-            ? { 
-                ...app, 
-                status: newStatus, 
-                reviewedBy: 'Admin Name',
-                reviewedAt: new Date().toISOString(),
-                comments: reviewComments
-              }
-            : app
-        )
+      const response = await leaveAPI.updateLeaveStatus(
+        applicationId, 
+        newStatus, 
+        reviewComments,
+        reviewerName
       );
+      
+      if (response.success) {
+        // Update local state
+        setApplications(prev => 
+          prev.map(app => 
+            app._id === applicationId 
+              ? { 
+                  ...app, 
+                  status: newStatus, 
+                  reviewedBy: reviewerName,
+                  reviewedAt: new Date().toISOString(),
+                  comments: reviewComments
+                }
+              : app
+          )
+        );
 
-      toast({
-        title: "Status Updated",
-        description: `Leave application has been ${newStatus}.`
-      });
+        toast({
+          title: "Status Updated",
+          description: `Leave application has been ${newStatus}.`
+        });
 
-      setSelectedApplication(null);
-      setReviewComments('');
+        setSelectedApplication(null);
+        setReviewComments('');
+        
+        // Refresh the applications list
+        const refreshResponse = await leaveAPI.getAllLeaveApplications();
+        if (refreshResponse.success && refreshResponse.data) {
+          setApplications(refreshResponse.data);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to update status');
+      }
     } catch (error) {
+      console.error('Error updating status:', error);
       toast({
         title: "Error",
         description: "Failed to update leave application status."
@@ -422,6 +414,86 @@ const LeaveApplication = () => {
                         </div>
                       </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="leaveType" className="text-orange-700 font-bold">
+                          Leave Type
+                        </Label>
+                        <Select value={leaveType} onValueChange={setLeaveType} required>
+                          <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                            <SelectValue placeholder="Select leave type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="vacation">Vacation</SelectItem>
+                            <SelectItem value="sick">Sick Leave</SelectItem>
+                            <SelectItem value="personal">Personal</SelectItem>
+                            <SelectItem value="maternity">Maternity</SelectItem>
+                            <SelectItem value="paternity">Paternity</SelectItem>
+                            <SelectItem value="bereavement">Bereavement</SelectItem>
+                            <SelectItem value="jury">Jury Duty</SelectItem>
+                            <SelectItem value="military">Military</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="duration" className="text-orange-700 font-bold">
+                          Duration
+                        </Label>
+                        <Select value={duration} onValueChange={setDuration} required>
+                          <SelectTrigger className="border-orange-300 focus:border-orange-500">
+                            <SelectValue placeholder="Select duration" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="full-day">Full Day</SelectItem>
+                            <SelectItem value="half-day">Half Day</SelectItem>
+                            <SelectItem value="few-hours">Few Hours</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="description" className="text-orange-700 font-bold">
+                          Description
+                        </Label>
+                        <Textarea
+                          id="description"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          placeholder="Please provide additional details about your leave request..."
+                          className="border-orange-300 focus:border-orange-500 focus:ring-orange-200"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="emergencyContact" className="text-orange-700 font-bold">
+                          Emergency Contact Name
+                        </Label>
+                        <Input
+                          id="emergencyContact"
+                          value={emergencyContact}
+                          onChange={(e) => setEmergencyContact(e.target.value)}
+                          placeholder="Emergency contact person"
+                          className="border-orange-300 focus:border-orange-500 focus:ring-orange-200"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="emergencyPhone" className="text-orange-700 font-bold">
+                          Emergency Contact Phone
+                        </Label>
+                        <Input
+                          id="emergencyPhone"
+                          type="tel"
+                          value={emergencyPhone}
+                          onChange={(e) => setEmergencyPhone(e.target.value)}
+                          placeholder="Emergency contact phone number"
+                          className="border-orange-300 focus:border-orange-500 focus:ring-orange-200"
+                          required
+                        />
+                      </div>
+
                       <Button 
                         type="submit" 
                         className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 text-lg font-medium mt-6"
@@ -482,7 +554,7 @@ const LeaveApplication = () => {
                       All Leave Applications ({filteredApplications.length})
                     </CardTitle>
                     <CardDescription>
-                      Review pending applications and manage approved/rejected requests across all departments
+                      Review pending applications and admin approved/rejected requests across all departments
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
