@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
 // Centralized API URLs for the project
-const API_BASE_URL = "http://localhost:5000/api"; // or your deployed backend
+const API_BASE_URL = "https://timesheetsbackend.myadminbuddy.com/api"; // Live backend URL
 
 export const API_URLS = {
   // Auth endpoints
