@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { User, FileText, AlertCircle, CheckCircle, Loader2, Info, Calendar, Clock } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar/EmployeeSidebar';
 import { Header } from '@/components/navbar/EmployeeHeader';
+import { API_URLS } from '@/lib/api';
 
 interface LeaveFormData {
   employeeName: string;
