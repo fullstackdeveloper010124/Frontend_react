@@ -179,9 +179,10 @@ export interface TeamMember {
   _id: string;
   employeeId: string;
   name: string;
-  project: string | { _id: string; name: string };
+  project: string | Project;
   email: string;
   phone?: string;
+  password?: string;
   address?: string;
   bankName?: string;
   bankAddress?: string;
@@ -189,11 +190,11 @@ export interface TeamMember {
   accountHolderAddress?: string;
   account?: string;
   accountType?: string;
-  charges?: number;
-  status?: string;
-  role?: string;
-  isUser?: boolean; // Flag to identify if this came from User collection (signup)
-}
+  role: 'Employee' | 'Manager' | 'Admin';
+  charges: number;
+  status: 'Active' | 'Inactive' | 'Pending';
+  shift: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+} 
 
 // Time Entry types
 export interface TimeEntry {

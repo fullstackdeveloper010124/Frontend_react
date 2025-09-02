@@ -4,8 +4,8 @@ import { Header } from '@/components/navbar/AdminHeader';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {  Dialog,  DialogContent,  DialogHeader,  DialogTitle,  DialogTrigger,  DialogFooter} from '@/components/ui/dialog';
-import {  AlertDialog,  AlertDialogAction,  AlertDialogCancel,  AlertDialogContent,  AlertDialogDescription,  AlertDialogFooter,  AlertDialogHeader,  AlertDialogTitle, AlertDialogTrigger,} from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +18,7 @@ interface NewMember {
   project: string;
   email: string;
   phone: string;
+  password: string;
   address: string;
   bankName: string;
   bankAddress: string;
@@ -25,9 +26,10 @@ interface NewMember {
   accountHolderAddress: string;
   account: string;
   accountType: string;
-  role: string;
+  role: 'Employee' | 'Manager' | 'Admin';
   charges: number;
-  status: string;
+  status: 'Active' | 'Inactive' | 'Pending';
+  shift: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
 }
 
 const Team = () => {
@@ -37,10 +39,13 @@ const Team = () => {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
   const [currentMember, setCurrentMember] = useState<TeamMember | null>(null);
+  const [timePeriod, setTimePeriod] = useState<string>('Weekly');
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [reorderLoading, setReorderLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [newMember, setNewMember] = useState<NewMember>({
@@ -49,6 +54,7 @@ const Team = () => {
     project: '',
     email: '',
     phone: '',
+    password: '',
     address: '',
     bankName: '',
     bankAddress: '',
@@ -58,7 +64,8 @@ const Team = () => {
     accountType: '',
     role: 'Employee',
     charges: 0,
-    status: 'Active'
+    status: 'Active',
+    shift: 'Monthly'
   });
 
   const { toast } = useToast();
@@ -84,62 +91,35 @@ const Team = () => {
       setError(null);
       
       try {
-        console.log('Fetching team members and projects...');
-        
         // Fetch team members
         const membersRes = await teamAPI.getAllTeam();
-        console.log('Team members response:', membersRes);
-        console.log('Response type:', typeof membersRes);
-        console.log('Response keys:', Object.keys(membersRes));
+        let membersData: TeamMember[] = [];
         
-        // Handle different response formats
-        let membersData = [];
-        if (membersRes && typeof membersRes === 'object') {
-          if (membersRes.data) {
-            membersData = membersRes.data;
-          } else if (Array.isArray(membersRes)) {
-            membersData = membersRes;
-          } else if ('members' in membersRes && Array.isArray((membersRes as any).members)) {
-            membersData = (membersRes as any).members;
-          } else if (membersRes.message) {
-            // If it's just a message response, try to get data from response body
-            console.log('Got message response, checking response body...');
-          }
+        if (membersRes?.success && Array.isArray(membersRes.data)) {
+          membersData = membersRes.data;
+        } else if (Array.isArray(membersRes)) {
+          membersData = membersRes;
+        } else {
+          console.warn('Unexpected team members response format:', membersRes);
         }
         
-        console.log('Processed members data:', membersData);
         setTeamMembers(membersData);
 
         // Fetch projects
         const projectsRes = await projectAPI.getAllProjects();
-        console.log('Projects response:', projectsRes);
-        console.log('Projects response type:', typeof projectsRes);
-        console.log('Projects response keys:', Object.keys(projectsRes));
+        let projectsData: Project[] = [];
         
-        // Handle different response formats for projects
-        let projectsData = [];
-        if (projectsRes && typeof projectsRes === 'object') {
-          if (projectsRes.data) {
-            projectsData = projectsRes.data;
-          } else if (Array.isArray(projectsRes)) {
-            projectsData = projectsRes;
-          } else if ('projects' in projectsRes && Array.isArray((projectsRes as any).projects)) {
-            projectsData = (projectsRes as any).projects;
-          }
+        if (projectsRes?.success && Array.isArray(projectsRes.data)) {
+          projectsData = projectsRes.data;
+        } else if (Array.isArray(projectsRes)) {
+          projectsData = projectsRes;
+        } else {
+          console.warn('Unexpected projects response format:', projectsRes);
         }
         
-        console.log('Processed projects data:', projectsData);
         setProjects(projectsData);
         
       } catch (err: any) {
-        console.error('Fetch Error:', err);
-        console.error('Error details:', {
-          message: err.message,
-          response: err.response,
-          status: err.response?.status,
-          data: err.response?.data
-        });
-        
         const errorMessage = err.response?.data?.error || err.message || 'Failed to fetch data';
         setError(errorMessage);
         toast({ 
@@ -156,23 +136,55 @@ const Team = () => {
   }, [toast]);
 
   const handleAddMember = async () => {
-    // Ensure project is an actual project ID, not a string like "Project Manager"
-    if (newMember.name && newMember.project && newMember.email) {
-      try {
-        const res = await teamAPI.addTeamMember({
-          ...newMember,
-          charges: 0,
-          status: 'Active'
-        });
+    // Input validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+    
+    if (!newMember.name.trim()) {
+      toast({ title: 'Validation Error', description: 'Name is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (!newMember.email.trim() || !emailRegex.test(newMember.email)) {
+      toast({ title: 'Validation Error', description: 'Valid email is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (!newMember.password || newMember.password.length < 6) {
+      toast({ title: 'Validation Error', description: 'Password must be at least 6 characters.', variant: 'destructive' });
+      return;
+    }
+    
+    if (!newMember.project) {
+      toast({ title: 'Validation Error', description: 'Project is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (newMember.phone && !phoneRegex.test(newMember.phone)) {
+      toast({ title: 'Validation Error', description: 'Valid phone number is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (newMember.charges < 0) {
+      toast({ title: 'Validation Error', description: 'Charges cannot be negative.', variant: 'destructive' });
+      return;
+    }
 
+    if (newMember.name && newMember.project && newMember.email && newMember.password) {
+      try {
+        await teamAPI.addTeamMember(newMember);
         toast({
           title: 'Success',
           description: 'Team member added successfully'
         });
 
-        // Update teamMembers state with the newly added member
         const updatedMembersRes = await teamAPI.getAllTeam();
-        setTeamMembers(updatedMembersRes.data || []);
+        const updatedData = updatedMembersRes?.success && Array.isArray(updatedMembersRes.data) 
+          ? updatedMembersRes.data 
+          : Array.isArray(updatedMembersRes) 
+          ? updatedMembersRes 
+          : [];
+        setTeamMembers(updatedData);
 
         setNewMember({
           employeeId: '',
@@ -180,6 +192,7 @@ const Team = () => {
           project: '',
           email: '',
           phone: '',
+          password: '',
           address: '',
           bankName: '',
           bankAddress: '',
@@ -189,24 +202,19 @@ const Team = () => {
           accountType: '',
           role: 'Employee',
           charges: 0,
-          status: 'Active'
+          status: 'Active',
+          shift: 'Monthly'
         });
 
         setIsAddMemberOpen(false);
       } catch (err: any) {
-        console.error('Add Member Error:', err);
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to add team member';
         toast({
           title: 'Error',
-          description: err.response?.data?.error || 'Something went wrong',
+          description: errorMessage,
           variant: 'destructive'
         });
       }
-    } else {
-      toast({
-        title: 'Validation Error',
-        description: 'Name, project, and email are required.',
-        variant: 'destructive'
-      });
     }
   };
 
@@ -225,8 +233,9 @@ const Team = () => {
       toast({ title: 'Deleted', description: 'Team member removed.' });
       setIsDeleteConfirmOpen(false);
       setMemberToDeleteId(null);
-    } catch (err) {
-      toast({ title: 'Error', description: 'Could not delete member', variant: 'destructive' });
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to delete team member';
+      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
     }
   };
 
@@ -235,15 +244,17 @@ const Team = () => {
     // Make sure to set the 'project' field to its _id if it's already populated as an object
     setCurrentMember({
       ...member,
-      project: member.project ? (typeof member.project === 'string' ? member.project : member.project._id) : ''
+      project: typeof member.project === 'object' && member.project?._id ? member.project._id : member.project || ''
     });
     setIsEditMemberOpen(true);
   };
 
   // Handle changes in the edit form
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | string, field: string) => {
+    if (!currentMember) return;
+    
     setCurrentMember(prev => ({
-      ...prev,
+      ...prev!,
       [field]: typeof e === 'string' ? e : e.target.value
     }));
   };
@@ -252,110 +263,173 @@ const Team = () => {
   const handleSaveEdit = async () => {
     if (!currentMember || !currentMember._id) return;
 
+    // Input validation for edit
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+    
+    if (!currentMember.name?.trim()) {
+      toast({ title: 'Validation Error', description: 'Name is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (!currentMember.email?.trim() || !emailRegex.test(currentMember.email)) {
+      toast({ title: 'Validation Error', description: 'Valid email is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (!currentMember.project) {
+      toast({ title: 'Validation Error', description: 'Project is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if (currentMember.phone && !phoneRegex.test(currentMember.phone)) {
+      toast({ title: 'Validation Error', description: 'Valid phone number is required.', variant: 'destructive' });
+      return;
+    }
+    
+    if ((currentMember.charges || 0) < 0) {
+      toast({ title: 'Validation Error', description: 'Charges cannot be negative.', variant: 'destructive' });
+      return;
+    }
+
     if (currentMember.name && currentMember.project && currentMember.email) {
       try {
         await teamAPI.updateTeamMember(currentMember._id, currentMember);
-        // After updating, re-fetch all members to ensure project name is correctly displayed
         const updatedMembersRes = await teamAPI.getAllTeam();
-        setTeamMembers(updatedMembersRes.data || []);
+        const updatedData = updatedMembersRes?.success && Array.isArray(updatedMembersRes.data) 
+          ? updatedMembersRes.data 
+          : Array.isArray(updatedMembersRes) 
+          ? updatedMembersRes 
+          : [];
+        setTeamMembers(updatedData);
         toast({ title: 'Updated', description: 'Member updated successfully' });
         setIsEditMemberOpen(false);
         setCurrentMember(null);
       } catch (err: any) {
-        console.error('Update Member Error:', err);
         toast({ title: 'Error', description: err.response?.data?.error || 'Failed to update member', variant: 'destructive' });
       }
-    } else {
-      toast({
-        title: 'Validation Error',
-        description: 'Name, project, and email are required for update.',
-        variant: 'destructive'
-      });
     }
   };
 
+
   // Function to reorder employee IDs to be sequential
-  const reorderEmployeeIds = () => {
-    const reorderedMembers = teamMembers.map((member, index) => ({
-      ...member,
-      employeeId: 'EMP' + String(index + 1).padStart(3, '0')
-    }));
-    setTeamMembers(reorderedMembers);
-    toast({ 
-      title: 'Success', 
-      description: 'Employee IDs have been reordered sequentially' 
-    });
+  const reorderEmployeeIds = async () => {
+    try {
+      const reorderedMembers = teamMembers.map((member, index) => ({
+        ...member,
+        employeeId: 'EMP' + String(index + 1).padStart(3, '0')
+      }));
+      
+      // Update each member in the backend
+      const updatePromises = reorderedMembers.map(member => 
+        member._id ? teamAPI.updateTeamMember(member._id, { employeeId: member.employeeId }) : Promise.resolve()
+      );
+      
+      await Promise.all(updatePromises);
+      setTeamMembers(reorderedMembers);
+      
+      toast({ 
+        title: 'Success', 
+        description: `Employee IDs have been reordered for ${reorderedMembers.length} members` 
+      });
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to reorder employee IDs';
+      toast({ 
+        title: 'Error', 
+        description: errorMessage, 
+        variant: 'destructive' 
+      });
+    }
   };
 
   // Function to sync signup data with team members
   const syncSignupData = async () => {
     try {
-      setLoading(true);
-      
-      // Fetch fresh data from both collections
-      const [membersRes, usersRes] = await Promise.all([
+      setSyncLoading(true);
+      const [membersRes, usersResponse] = await Promise.all([
         teamAPI.getAllTeam(),
-        fetch('http://localhost:5000/api/users').then(res => res.ok ? res.json() : [])
+        fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/users`)
       ]);
       
-      let membersData = [];
-      if (membersRes && typeof membersRes === 'object') {
-        if (membersRes.data) {
-          membersData = membersRes.data;
-        } else if (Array.isArray(membersRes)) {
-          membersData = membersRes;
-        } else if ('members' in membersRes && Array.isArray((membersRes as any).members)) {
-          membersData = (membersRes as any).members;
-        }
+      let membersData: TeamMember[] = [];
+      if (membersRes?.success && Array.isArray(membersRes.data)) {
+        membersData = membersRes.data;
+      } else if (Array.isArray(membersRes)) {
+        membersData = membersRes;
+      }
+      let usersData = [];
+      
+      if (usersResponse.ok) {
+        usersData = await usersResponse.json();
       }
       
-      // Convert User data to TeamMember format
-      const convertedUsers = usersRes.map((user: any) => ({
-        _id: user._id,
-        employeeId: user.role === 'Admin' ? 'ADM001' : 'MGR001',
-        name: user.fullName || user.name,
-        project: 'N/A',
-        email: user.email,
-        phone: user.phone,
-        address: '',
-        bankName: '',
-        bankAddress: '',
-        accountHolder: '',
-        accountHolderAddress: '',
-        account: '',
-        accountType: '',
-        charges: 0,
-        status: 'Active',
-        role: user.role,
-        isUser: true
-      }));
+      if (!Array.isArray(usersData)) {
+        usersData = [];
+      }
       
-      // Combine both collections
+      // Generate unique employee IDs for synced users
+      const existingIds = new Set(membersData.map((m: TeamMember) => m.employeeId));
+      let adminCounter = 1;
+      let managerCounter = 1;
+      
+      const convertedUsers = usersData.map((user: any) => {
+        let employeeId = '';
+        if (user.role === 'Admin') {
+          do {
+            employeeId = `ADM${String(adminCounter).padStart(3, '0')}`;
+            adminCounter++;
+          } while (existingIds.has(employeeId));
+        } else if (user.role === 'Manager') {
+          do {
+            employeeId = `MGR${String(managerCounter).padStart(3, '0')}`;
+            managerCounter++;
+          } while (existingIds.has(employeeId));
+        } else {
+          employeeId = 'USR001'; // Default for other roles
+        }
+        
+        existingIds.add(employeeId);
+        
+        return {
+          _id: user._id,
+          employeeId,
+          name: user.fullName || user.name || 'Unknown User',
+          project: 'N/A',
+          email: user.email || '',
+          phone: user.phone || '',
+          address: '',
+          bankName: '',
+          bankAddress: '',
+          accountHolder: '',
+          accountHolderAddress: '',
+          account: '',
+          accountType: '',
+          charges: 0,
+          status: 'Active' as const,
+          role: user.role || 'Employee',
+          shift: 'Monthly' as const,
+          isUser: true
+        };
+      });
+      
       const combinedData = [...convertedUsers, ...membersData];
       setTeamMembers(combinedData);
-      
       toast({ 
         title: 'Success', 
-        description: `Synced data: ${combinedData.length} total members` 
+        description: `Successfully synced ${convertedUsers.length} users with ${membersData.length} existing members` 
       });
-      
-    } catch (err) {
-      console.error('Sync error:', err);
-      toast({ 
-        title: 'Error', 
-        description: 'Failed to sync signup data', 
-        variant: 'destructive' 
-      });
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to sync signup data';
+      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
     } finally {
-      setLoading(false);
+      setSyncLoading(false);
     }
   };
 
   const totalCharges = teamMembers.reduce((sum, m) => sum + (m.charges || 0), 0);
   const activeMembers = teamMembers.filter(m => m.status === 'Active').length;
-  const avgcharges = teamMembers.length > 0 ? (totalCharges / teamMembers.length).toFixed(1) : '0';
+  const avgCharges = teamMembers.length > 0 ? (totalCharges / teamMembers.length).toFixed(1) : '0';
 
-  // Show loading state
   if (loading) {
     return (
       <ThemeProvider>
@@ -377,7 +451,6 @@ const Team = () => {
     );
   }
 
-  // Show error state
   if (error) {
     return (
       <ThemeProvider>
@@ -389,12 +462,7 @@ const Team = () => {
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
                 <strong className="font-bold">Error:</strong>
                 <span className="block sm:inline"> {error}</span>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="ml-2 bg-red-600 text-white px-2 py-1 rounded text-sm hover:bg-red-700"
-                >
-                  Retry
-                </button>
+                <button onClick={() => window.location.reload()} className="ml-2 bg-red-600 text-white px-2 py-1 rounded text-sm hover:bg-red-700">Retry</button>
               </div>
             </main>
           </div>
@@ -410,39 +478,57 @@ const Team = () => {
         <div className="flex-1 overflow-auto">
           <Header onMenuClick={() => setSidebarOpen(true)} />
           <main className="p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Team</h1>
-                <p className="text-gray-600 dark:text-gray-400">Manage your team members and track their activity</p>
-                {teamMembers.length > 0 && (
-                  <p className="text-sm text-gray-500 mt-1">Found {teamMembers.length} team member(s)</p>
-                )}
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Team Management</h1>
+                <p className="text-lg text-gray-600 dark:text-gray-400">Manage team members, sync signup data, and track activity</p>
               </div>
-              <div className="flex space-x-2">
-                <Button 
-                  variant="outline"
-                  onClick={reorderEmployeeIds}
-                  disabled={teamMembers.length === 0}
-                  title="Reorder existing employee IDs to be sequential"
-                >
-                  Reorder IDs
-                </Button>
+              <div className="flex flex-wrap gap-3">
                 <Button
                   variant="outline"
                   onClick={syncSignupData}
-                  disabled={loading}
-                  title="Sync signup data with existing team members"
+                  disabled={syncLoading || loading}
+                  className="flex items-center space-x-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300"
                 >
-                  Sync Signup Data
+                  {syncLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Syncing...</span>
+                    </>
+                  ) : (
+                    <span>🔄 Sync Data</span>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setReorderLoading(true);
+                    try {
+                      await reorderEmployeeIds();
+                    } finally {
+                      setReorderLoading(false);
+                    }
+                  }}
+                  disabled={reorderLoading || loading}
+                  className="flex items-center space-x-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300"
+                >
+                  {reorderLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Reordering...</span>
+                    </>
+                  ) : (
+                    <span>📋 Reorder IDs</span>
+                  )}
                 </Button>
                 <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Button className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg">
                       <Plus className="w-4 h-4" />
                       <span>Add Member</span>
                     </Button>
                   </DialogTrigger>
-                <DialogContent className="max-h-[80vh] overflow-y-auto">
+                  <DialogContent className="max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Team Member</DialogTitle>
                   </DialogHeader>
@@ -470,22 +556,7 @@ const Team = () => {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="role">Role *</Label>
-                          <Select
-                            value={newMember.role}
-                            onValueChange={(value) => setNewMember({ ...newMember, role: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Employee">Employee</SelectItem>
-                              <SelectItem value="Manager">Manager</SelectItem>
-                              <SelectItem value="Admin">Admin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
+                          {/* Updated Select for Project */}
                           <Label htmlFor="project">Project *</Label>
                           <Select
                             value={newMember.project}
@@ -514,6 +585,16 @@ const Team = () => {
                           />
                         </div>
                         <div>
+                          <Label htmlFor="password">Password *</Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            value={newMember.password}
+                            onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                            placeholder="Enter password"
+                          />
+                        </div>
+                        <div>
                           <Label htmlFor="phone">Phone</Label>
                           <Input
                             id="phone"
@@ -531,20 +612,29 @@ const Team = () => {
                             placeholder="Enter full address"
                           />
                         </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="charges">charges This Week</Label>
+                          <Label htmlFor="role">Role</Label>
+                          <Select
+                            value={newMember.role}
+                            onValueChange={(value) => setNewMember({ ...newMember, role: value as 'Employee' | 'Manager' | 'Admin' })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Employee">Employee</SelectItem>
+                              <SelectItem value="Manager">Manager</SelectItem>
+                              <SelectItem value="Admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="charges">Charges</Label>
                           <Input
                             id="charges"
                             type="number"
-                            min="0"
                             value={newMember.charges}
-                            onChange={(e) => setNewMember({ ...newMember, charges: parseInt(e.target.value) || 0 })}
+                            onChange={(e) => setNewMember({ ...newMember, charges: Number(e.target.value) })}
                             placeholder="Enter charges"
                           />
                         </div>
@@ -552,7 +642,7 @@ const Team = () => {
                           <Label htmlFor="status">Status</Label>
                           <Select
                             value={newMember.status}
-                            onValueChange={(value) => setNewMember({ ...newMember, status: value })}
+                            onValueChange={(value) => setNewMember({ ...newMember, status: value as 'Active' | 'Inactive' | 'Pending' })}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select status" />
@@ -626,9 +716,25 @@ const Team = () => {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Savings">Savings</SelectItem>
-                              <SelectItem value="Checking">Checking</SelectItem>
+                              <SelectItem value="Current">Current</SelectItem>
                               <SelectItem value="Business">Business</SelectItem>
-                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="shift">Shift *</Label>
+                          <Select
+                            value={newMember.shift}
+                            onValueChange={(value) => setNewMember({ ...newMember, shift: value as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly' })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select shift" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Hourly">Hourly</SelectItem>
+                              <SelectItem value="Daily">Daily</SelectItem>
+                              <SelectItem value="Weekly">Weekly</SelectItem>
+                              <SelectItem value="Monthly">Monthly</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -641,131 +747,194 @@ const Team = () => {
                       </Button>
                       <Button onClick={handleAddMember}>Add Member</Button>
                     </div>
-                                       </div>
-                   </DialogContent>
-                 </Dialog>
-               </div>
-             </div>
-
-            {/* Team Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Members</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{teamMembers.length}</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Active This Week</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{activeMembers}</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total charges</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{totalCharges}</p>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg charges/Member</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{avgcharges}</p>
+                  </div>
+                </DialogContent>
+                </Dialog>
               </div>
             </div>
 
-            {/* Show message if no team members */}
-            {teamMembers.length === 0 ? (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
-                <p className="text-gray-500 dark:text-gray-400 mb-4">No team members found.</p>
-                <Button onClick={() => setIsAddMemberOpen(true)}>
-                  Add Your First Team Member
-                </Button>
+            {/* Team Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl shadow-lg border border-blue-200 dark:border-blue-700 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">Total Members</h3>
+                    <p className="text-3xl font-bold text-blue-900 dark:text-blue-100 mt-2">{teamMembers.length}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-200 dark:bg-blue-700 rounded-lg flex items-center justify-center">
+                    <span className="text-blue-600 dark:text-blue-300 text-xl font-bold">👥</span>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-900/40">
-                    <tr>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">ID</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Name</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Role</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-400">Project</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Email</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Phone</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Address</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Bank</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Holder</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Type</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Charges</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
-                      <th className="px-6 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {teamMembers.map((member, idx) => (
-                      <tr key={member._id || idx}>
-                                                 <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">
-                           <div className="flex items-center space-x-2">
-                             <span>{member.employeeId}</span>
-                             {member.isUser && (
-                               <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
-                                 Signup
-                               </span>
-                             )}
-                           </div>
-                         </td>
-                         <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            member.role === 'Admin'
-                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400'
-                              : member.role === 'Manager'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                          }`}>
-                            {member.role || 'Employee'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                          {member.project ? (typeof member.project === 'string' ? member.project : member.project.name) : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.email}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.phone}</td>
-                        <td className="px-6 py-4 max-w-xs text-gray-600 dark:text-gray-300 truncate">{member.address}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.bankName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountHolder}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.account}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountType}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.charges || 0}h</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            member.status === 'Active'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                              : member.status === 'Leave'
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-                              : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                          }`}>
-                            {member.status || 'Active'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mr-2"
-                            onClick={() => openEditModal(member)}
-                          >
-                            <Edit className="w-4 h-4 mr-1" /> Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => confirmDelete(member._id)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" /> Delete
-                          </Button>
-                        </td>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl shadow-lg border border-green-200 dark:border-green-700 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-green-600 dark:text-green-400 uppercase tracking-wide">Active Members</h3>
+                    <p className="text-3xl font-bold text-green-900 dark:text-green-100 mt-2">{activeMembers}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-green-200 dark:bg-green-700 rounded-lg flex items-center justify-center">
+                    <span className="text-green-600 dark:text-green-300 text-xl font-bold">✅</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl shadow-lg border border-purple-200 dark:border-purple-700 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-purple-600 dark:text-purple-400 uppercase tracking-wide">Total Charges</h3>
+                    <p className="text-3xl font-bold text-purple-900 dark:text-purple-100 mt-2">${totalCharges}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-purple-200 dark:bg-purple-700 rounded-lg flex items-center justify-center">
+                    <span className="text-purple-600 dark:text-purple-300 text-xl font-bold">💰</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl shadow-lg border border-orange-200 dark:border-orange-700 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wide">Avg Charges</h3>
+                    <p className="text-3xl font-bold text-orange-900 dark:text-orange-100 mt-2">${avgCharges}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-orange-200 dark:bg-orange-700 rounded-lg flex items-center justify-center">
+                    <span className="text-orange-600 dark:text-orange-300 text-xl font-bold">📊</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Team Members Table */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Team Members</h2>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Showing {teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table className="w-full min-w-max">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">ID</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Name</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Role</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Project</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Contact</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Address</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Bank Info</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Charges</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Shift</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Status</th>
+                        <th className="text-left py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm uppercase tracking-wider">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {teamMembers.map((member) => (
+                        <tr key={member._id} className="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                          <td className="py-4 px-6">
+                            <div className="font-mono text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                              {member.employeeId}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="font-medium text-gray-900 dark:text-white">{member.name}</div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              member.role === 'Admin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                              member.role === 'Manager' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                              'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                            }`}>
+                              {member.role || 'Employee'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                              {member.project ? (typeof member.project === 'object' ? member.project.name : member.project) : 
+                                <span className="text-gray-400 italic">No Project</span>
+                              }
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1">
+                              <div className="text-sm text-gray-900 dark:text-white">{member.email}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{member.phone || 'No phone'}</div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="text-sm text-gray-900 dark:text-white max-w-32 truncate" title={member.address || 'No address'}>
+                              {member.address || <span className="text-gray-400 italic">No address</span>}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">{member.bankName || 'N/A'}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{member.account || 'No account'}</div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                              ${member.charges || 0}
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                              member.shift === 'Hourly' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                              member.shift === 'Daily' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                              member.shift === 'Weekly' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                              'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                            }`}>
+                              {member.shift || 'Monthly'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              member.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                              member.status === 'Inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                            }`}>
+                              {member.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditModal(member)}
+                                className="hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-900/20"
+                              >
+                                <Edit className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => confirmDelete(member._id)}
+                                className="hover:bg-red-50 hover:border-red-300 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {teamMembers.length === 0 && (
+                    <div className="text-center py-12">
+                      <div className="mx-auto w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                        <Plus className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No team members yet</h3>
+                      <p className="text-gray-500 dark:text-gray-400 mb-4">Get started by adding your first team member to the system.</p>
+                      <Button onClick={() => setIsAddMemberOpen(true)} className="bg-indigo-600 hover:bg-indigo-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add First Member
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
           </main>
         </div>
       </div>
@@ -782,28 +951,27 @@ const Team = () => {
                 <h3 className="font-medium text-gray-900 dark:text-white mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="editEmployeeId">Employee ID</Label>
+                    <Label htmlFor="edit-employeeId">Employee ID</Label>
                     <Input
-                      id="editEmployeeId"
+                      id="edit-employeeId"
                       value={currentMember.employeeId}
                       readOnly
                       className="bg-gray-100 dark:bg-gray-700"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editName">Name *</Label>
+                    <Label htmlFor="edit-name">Name *</Label>
                     <Input
-                      id="editName"
+                      id="edit-name"
                       value={currentMember.name}
                       onChange={(e) => handleEditChange(e, 'name')}
                       placeholder="Enter member name"
                     />
                   </div>
                   <div>
-                    {/* Updated Select for Project in Edit */}
-                    <Label htmlFor="editProject">Project *</Label>
+                    <Label htmlFor="edit-project">Project *</Label>
                     <Select
-                      value={typeof currentMember.project === 'string' ? currentMember.project : currentMember.project._id}
+                      value={currentMember.project}
                       onValueChange={(value) => handleEditChange(value, 'project')}
                     >
                       <SelectTrigger>
@@ -819,9 +987,9 @@ const Team = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="editEmail">Email *</Label>
+                    <Label htmlFor="edit-email">Email *</Label>
                     <Input
-                      id="editEmail"
+                      id="edit-email"
                       type="email"
                       value={currentMember.email}
                       onChange={(e) => handleEditChange(e, 'email')}
@@ -829,22 +997,91 @@ const Team = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editPhone">Phone</Label>
+                    <Label htmlFor="edit-password">Password</Label>
                     <Input
-                      id="editPhone"
+                      id="edit-password"
+                      type="password"
+                      value={currentMember.password || ''}
+                      onChange={(e) => handleEditChange(e, 'password')}
+                      placeholder="Enter new password (leave blank to keep current)"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Input
+                      id="edit-phone"
                       value={currentMember.phone}
                       onChange={(e) => handleEditChange(e, 'phone')}
                       placeholder="Enter phone number"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <Label htmlFor="editAddress">Address</Label>
+                    <Label htmlFor="edit-address">Address</Label>
                     <Input
-                      id="editAddress"
+                      id="edit-address"
                       value={currentMember.address}
                       onChange={(e) => handleEditChange(e, 'address')}
                       placeholder="Enter full address"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-role">Role</Label>
+                    <Select
+                      value={currentMember.role}
+                      onValueChange={(value) => handleEditChange(value as 'Employee' | 'Manager' | 'Admin', 'role')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Employee">Employee</SelectItem>
+                        <SelectItem value="Manager">Manager</SelectItem>
+                        <SelectItem value="Admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-charges">Charges</Label>
+                    <Input
+                      id="edit-charges"
+                      type="number"
+                      value={currentMember.charges}
+                      onChange={(e) => handleEditChange(e, 'charges')}
+                      placeholder="Enter charges"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-status">Status</Label>
+                    <Select
+                      value={currentMember.status}
+                      onValueChange={(value) => handleEditChange(value as 'Active' | 'Inactive' | 'Pending', 'status')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Inactive">Inactive</SelectItem>
+                        <SelectItem value="Leave">On Leave</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-shift">Shift *</Label>
+                    <Select
+                      value={currentMember.shift}
+                      onValueChange={(value) => handleEditChange(value as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly', 'shift')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select shift" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Hourly">Hourly</SelectItem>
+                        <SelectItem value="Daily">Daily</SelectItem>
+                        <SelectItem value="Weekly">Weekly</SelectItem>
+                        <SelectItem value="Monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -853,52 +1090,52 @@ const Team = () => {
                 <h3 className="font-medium text-gray-900 dark:text-white mb-4">Bank Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="editBankName">Bank Name</Label>
+                    <Label htmlFor="edit-bankName">Bank Name</Label>
                     <Input
-                      id="editBankName"
+                      id="edit-bankName"
                       value={currentMember.bankName}
                       onChange={(e) => handleEditChange(e, 'bankName')}
                       placeholder="Enter bank name"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <Label htmlFor="editBankAddress">Full Address of Bank</Label>
+                    <Label htmlFor="edit-bankAddress">Full Address of Bank</Label>
                     <Input
-                      id="editBankAddress"
+                      id="edit-bankAddress"
                       value={currentMember.bankAddress}
                       onChange={(e) => handleEditChange(e, 'bankAddress')}
                       placeholder="Enter bank's full address"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editAccountHolder">Account Holder</Label>
+                    <Label htmlFor="edit-accountHolder">Account Holder</Label>
                     <Input
-                      id="editAccountHolder"
+                      id="edit-accountHolder"
                       value={currentMember.accountHolder}
                       onChange={(e) => handleEditChange(e, 'accountHolder')}
                       placeholder="Account holder name"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <Label htmlFor="editAccountHolderAddress">Account Holder Address</Label>
+                    <Label htmlFor="edit-accountHolderAddress">Account Holder Address</Label>
                     <Input
-                      id="editAccountHolderAddress"
+                      id="edit-accountHolderAddress"
                       value={currentMember.accountHolderAddress}
                       onChange={(e) => handleEditChange(e, 'accountHolderAddress')}
                       placeholder="Account holder address"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editAccount">Account Number</Label>
+                    <Label htmlFor="edit-account">Account Number</Label>
                     <Input
-                      id="editAccount"
+                      id="edit-account"
                       value={currentMember.account}
                       onChange={(e) => handleEditChange(e, 'account')}
                       placeholder="Account number"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editAccountType">Account Type</Label>
+                    <Label htmlFor="edit-accountType">Account Type</Label>
                     <Select
                       value={currentMember.accountType}
                       onValueChange={(value) => handleEditChange(value, 'accountType')}
@@ -916,40 +1153,6 @@ const Team = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Status and charges for editing */}
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="editcharges">Charges This Week</Label>
-                    <Input
-                      id="editcharges"
-                      type="number"
-                      value={currentMember.charges}
-                      onChange={(e) => handleEditChange(e, 'charges')}
-                      placeholder="Enter charges"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editStatus">Status</Label>
-                    <Select
-                      value={currentMember.status}
-                      onValueChange={(value) => handleEditChange(value, 'status')}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Active">Active</SelectItem>
-                        <SelectItem value="Inactive">Inactive</SelectItem>
-                        <SelectItem value="Leave">On Leave</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsEditMemberOpen(false)}>

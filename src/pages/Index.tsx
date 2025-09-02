@@ -25,7 +25,7 @@ const ensureErrorMessage = (err: unknown): string => {
   }
 };
 
-const Login: React.FC = () => {
+const Index: React.FC = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -159,4 +159,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Index;

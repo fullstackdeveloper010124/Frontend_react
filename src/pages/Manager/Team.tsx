@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/Sidebar/ManagerSidebar';
 import { Header } from '@/components/navbar/ManagerHeader';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import { Plus, Trash2, Edit } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,9 +26,28 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import axios from 'axios';
-import { toast } from '@/hooks/use-toast';
-import { API_URLS } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+import { teamAPI, projectAPI, TeamMember, Project } from '@/lib/api';
+
+interface NewMember {
+  employeeId: string;
+  name: string;
+  project: string;
+  email: string;
+  phone: string;
+  password: string;
+  address: string;
+  bankName: string;
+  bankAddress: string;
+  accountHolder: string;
+  accountHolderAddress: string;
+  account: string;
+  accountType: string;
+  role: 'Employee' | 'Manager' | 'Admin';
+  charges: number;
+  status: 'Active' | 'Inactive' | 'Pending';
+  shift: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+}
 
 const Team = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -36,55 +55,125 @@ const Team = () => {
   const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
-  const [currentMember, setCurrentMember] = useState<any | null>(null);
+  const [currentMember, setCurrentMember] = useState<TeamMember | null>(null);
 
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]); // New state for projects
-  const [newMember, setNewMember] = useState({
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [newMember, setNewMember] = useState<NewMember>({
     employeeId: '',
     name: '',
-    project: '', // Stores project _id
+    project: '',
     email: '',
     phone: '',
+    password: '',
     address: '',
     bankName: '',
     bankAddress: '',
     accountHolder: '',
     accountHolderAddress: '',
     account: '',
-    accountType: ''
+    accountType: '',
+    role: 'Employee',
+    charges: 0,
+    status: 'Active',
+    shift: 'Monthly'
   });
+
+  const { toast } = useToast();
 
   useEffect(() => {
     if (isAddMemberOpen) {
-      const randomId = 'EMP' + Math.floor(1000 + Math.random() * 9000);
-      setNewMember(prev => ({ ...prev, employeeId: randomId }));
+      // Generate sequential employee ID based on existing members
+      const existingIds = teamMembers.map(member => {
+        const idMatch = member.employeeId?.match(/EMP(\d+)/);
+        return idMatch ? parseInt(idMatch[1]) : 0;
+      });
+      
+      const nextId = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+      const sequentialId = 'EMP' + String(nextId).padStart(3, '0');
+      
+      setNewMember(prev => ({ ...prev, employeeId: sequentialId }));
     }
-  }, [isAddMemberOpen]);
+  }, [isAddMemberOpen, teamMembers]);
 
   useEffect(() => {
     const fetchMembersAndProjects = async () => {
+      setLoading(true);
+      setError(null);
+      
       try {
+        console.log('Fetching team members and projects...');
+        
         // Fetch team members
-        const membersRes = await axios.get(API_URLS.teamAll);
-        setTeamMembers(membersRes.data);
+        const membersRes = await teamAPI.getAllTeam();
+        console.log('Team members response:', membersRes);
+        
+        // Handle different response formats
+        let membersData = [];
+        if (membersRes && typeof membersRes === 'object') {
+          if (membersRes.data) {
+            membersData = membersRes.data;
+          } else if (Array.isArray(membersRes)) {
+            membersData = membersRes;
+          } else if ('members' in membersRes && Array.isArray((membersRes as any).members)) {
+            membersData = (membersRes as any).members;
+          }
+        }
+        
+        console.log('Processed members data:', membersData);
+        setTeamMembers(membersData);
 
         // Fetch projects
-        const projectsRes = await axios.get(API_URLS.projectsAll);
-        setProjects(projectsRes.data);
-      } catch (err) {
+        const projectsRes = await projectAPI.getAllProjects();
+        console.log('Projects response:', projectsRes);
+        
+        // Handle different response formats for projects
+        let projectsData = [];
+        if (projectsRes && typeof projectsRes === 'object') {
+          if (projectsRes.data) {
+            projectsData = projectsRes.data;
+          } else if (Array.isArray(projectsRes)) {
+            projectsData = projectsRes;
+          } else if ('projects' in projectsRes && Array.isArray((projectsRes as any).projects)) {
+            projectsData = (projectsRes as any).projects;
+          }
+        }
+        
+        console.log('Processed projects data:', projectsData);
+        setProjects(projectsData);
+        
+      } catch (err: any) {
         console.error('Fetch Error:', err);
-        toast({ title: 'Error', description: 'Failed to fetch data', variant: 'destructive' });
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response,
+          status: err.response?.status,
+          data: err.response?.data
+        });
+        
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to fetch data';
+        setError(errorMessage);
+        toast({ 
+          title: 'Error', 
+          description: errorMessage, 
+          variant: 'destructive' 
+        });
+      } finally {
+        setLoading(false);
       }
     };
+    
     fetchMembersAndProjects();
-  }, []);
+  }, [toast]);
 
   const handleAddMember = async () => {
     // Ensure project is an actual project ID, not a string like "Project Manager"
-    if (newMember.name && newMember.project && newMember.email) {
+    if (newMember.name && newMember.project && newMember.email && newMember.password) {
       try {
-        const res = await axios.post(API_URLS.teamAdd, {
+        const res = await teamAPI.addTeamMember({
           ...newMember,
           charges: 0,
           status: 'Active'
@@ -95,14 +184,9 @@ const Team = () => {
           description: 'Team member added successfully'
         });
 
-        // Update teamMembers state with the newly added member, including populated project data
-        // The backend `populate` in the `get /all` endpoint ensures the `project` field is an object
-        // when fetching existing members, so we need to make sure the added member also has it.
-        // We'll re-fetch all members for simplicity, or manually populate the project name here.
-        // For now, let's re-fetch all for guaranteed consistency.
-        const updatedMembersRes = await axios.get(API_URLS.teamAll);
-        setTeamMembers(updatedMembersRes.data);
-
+        // Update teamMembers state with the newly added member
+        const updatedMembersRes = await teamAPI.getAllTeam();
+        setTeamMembers(updatedMembersRes.data || []);
 
         setNewMember({
           employeeId: '',
@@ -110,13 +194,18 @@ const Team = () => {
           project: '',
           email: '',
           phone: '',
+          password: '',
           address: '',
           bankName: '',
           bankAddress: '',
           accountHolder: '',
           accountHolderAddress: '',
           account: '',
-          accountType: ''
+          accountType: '',
+          role: 'Employee',
+          charges: 0,
+          status: 'Active',
+          shift: 'Monthly'
         });
 
         setIsAddMemberOpen(false);
@@ -147,7 +236,7 @@ const Team = () => {
     if (!memberToDeleteId) return;
 
     try {
-      await axios.delete(API_URLS.teamDelete(memberToDeleteId));
+      await teamAPI.deleteTeamMember(memberToDeleteId);
       setTeamMembers(prev => prev.filter(member => member._id !== memberToDeleteId));
       toast({ title: 'Deleted', description: 'Team member removed.' });
       setIsDeleteConfirmOpen(false);
@@ -158,11 +247,11 @@ const Team = () => {
   };
 
   // Function to open edit modal and pre-populate data
-  const openEditModal = (member: any) => {
+  const openEditModal = (member: TeamMember) => {
     // Make sure to set the 'project' field to its _id if it's already populated as an object
     setCurrentMember({
       ...member,
-      project: member.project ? member.project._id : '' // Set project to ID for the select component
+      project: member.project ? (typeof member.project === 'string' ? member.project : member.project._id) : ''
     });
     setIsEditMemberOpen(true);
   };
@@ -181,10 +270,10 @@ const Team = () => {
 
     if (currentMember.name && currentMember.project && currentMember.email) {
       try {
-        const res = await axios.put(API_URLS.teamUpdate(currentMember._id), currentMember);
+        await teamAPI.updateTeamMember(currentMember._id, currentMember);
         // After updating, re-fetch all members to ensure project name is correctly displayed
-        const updatedMembersRes = await axios.get(API_URLS.teamAll);
-        setTeamMembers(updatedMembersRes.data);
+        const updatedMembersRes = await teamAPI.getAllTeam();
+        setTeamMembers(updatedMembersRes.data || []);
         toast({ title: 'Updated', description: 'Member updated successfully' });
         setIsEditMemberOpen(false);
         setCurrentMember(null);
@@ -206,6 +295,54 @@ const Team = () => {
   const activeMembers = teamMembers.filter(m => m.status === 'Active').length;
   const avgCharges = teamMembers.length > 0 ? (totalCharges / teamMembers.length).toFixed(1) : '0';
 
+  // Show loading state
+  if (loading) {
+    return (
+      <ThemeProvider>
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <div className="flex-1 overflow-auto">
+            <Header onMenuClick={() => setSidebarOpen(true)} />
+            <main className="p-6">
+              <div className="flex items-center justify-center p-8">
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="animate-spin h-8 w-8 text-indigo-600" />
+                  <span className="text-lg">Loading team data...</span>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <ThemeProvider>
+        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <div className="flex-1 overflow-auto">
+            <Header onMenuClick={() => setSidebarOpen(true)} />
+            <main className="p-6">
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <strong className="font-bold">Error:</strong>
+                <span className="block sm:inline"> {error}</span>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="ml-2 bg-red-600 text-white px-2 py-1 rounded text-sm hover:bg-red-700"
+                >
+                  Retry
+                </button>
+              </div>
+            </main>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
       <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
@@ -217,6 +354,9 @@ const Team = () => {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Team</h1>
                 <p className="text-gray-600 dark:text-gray-400">Manage your team members and track their activity</p>
+                {teamMembers.length > 0 && (
+                  <p className="text-sm text-gray-500 mt-1">Found {teamMembers.length} team member(s)</p>
+                )}
               </div>
               <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
                 <DialogTrigger asChild>
@@ -272,6 +412,22 @@ const Team = () => {
                           </Select>
                         </div>
                         <div>
+                          <Label htmlFor="role">Role *</Label>
+                          <Select
+                            value={newMember.role}
+                            onValueChange={(value) => setNewMember({ ...newMember, role: value as 'Employee' | 'Manager' | 'Admin' })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Employee">Employee</SelectItem>
+                              <SelectItem value="Manager">Manager</SelectItem>
+                              <SelectItem value="Admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
                           <Label htmlFor="email">Email *</Label>
                           <Input
                             id="email"
@@ -279,6 +435,16 @@ const Team = () => {
                             value={newMember.email}
                             onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
                             placeholder="Enter email address"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="password">Password *</Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            value={newMember.password}
+                            onChange={(e) => setNewMember({ ...newMember, password: e.target.value })}
+                            placeholder="Enter password"
                           />
                         </div>
                         <div>
@@ -370,6 +536,39 @@ const Team = () => {
                       </div>
                     </div>
 
+                    <div>
+                      <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="charges">Charges This Week</Label>
+                          <Input
+                            id="charges"
+                            type="number"
+                            min="0"
+                            value={newMember.charges}
+                            onChange={(e) => setNewMember({ ...newMember, charges: parseInt(e.target.value) || 0 })}
+                            placeholder="Enter charges"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="status">Status</Label>
+                          <Select
+                            value={newMember.status}
+                            onValueChange={(value) => setNewMember({ ...newMember, status: value as 'Active' | 'Inactive' | 'Pending' })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Active">Active</SelectItem>
+                              <SelectItem value="Inactive">Inactive</SelectItem>
+                              <SelectItem value="Leave">On Leave</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex justify-end space-x-2 pt-4">
                       <Button variant="outline" onClick={() => setIsAddMemberOpen(false)}>
                         Cancel
@@ -401,18 +600,28 @@ const Team = () => {
               </div>
             </div>
 
-            {/* Team Members Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-              <div className="p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Team Members</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+            {/* Show message if no team members */}
+            {teamMembers.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <p className="text-gray-500 dark:text-gray-400 mb-4">No team members found.</p>
+                <Button onClick={() => setIsAddMemberOpen(true)}>
+                  Add Your First Team Member
+                </Button>
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                <div className="p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Team Members</h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-gray-700">
                         <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Employee ID</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Name</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Role</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Project</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Email</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Charges</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Status</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Actions</th>
                       </tr>
@@ -422,10 +631,22 @@ const Team = () => {
                         <tr key={member._id} className="border-b border-gray-100 dark:border-gray-700">
                           <td className="py-3 px-4 text-gray-900 dark:text-white">{member.employeeId}</td>
                           <td className="py-3 px-4 text-gray-900 dark:text-white">{member.name}</td>
+                          <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              member.role === 'Admin'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400'
+                                : member.role === 'Manager'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                            }`}>
+                              {member.role || 'Employee'}
+                            </span>
+                          </td>
                           <td className="py-3 px-4 text-gray-900 dark:text-white">
-                            {member.project ? member.project.name : 'No Project'}
+                            {member.project ? (typeof member.project === 'string' ? member.project : member.project.name) : 'No Project'}
                           </td>
                           <td className="py-3 px-4 text-gray-900 dark:text-white">{member.email}</td>
+                          <td className="py-3 px-4 text-gray-600 dark:text-gray-300">{member.charges || 0}h</td>
                           <td className="py-3 px-4">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                               member.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
@@ -457,9 +678,10 @@ const Team = () => {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </main>
         </div>
       </div>
@@ -494,9 +716,25 @@ const Team = () => {
                     />
                   </div>
                   <div>
+                    <Label htmlFor="edit-role">Role *</Label>
+                    <Select
+                      value={currentMember.role}
+                      onValueChange={(value) => handleEditChange(value, 'role')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Employee">Employee</SelectItem>
+                        <SelectItem value="Manager">Manager</SelectItem>
+                        <SelectItem value="Admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label htmlFor="edit-project">Project *</Label>
                     <Select
-                      value={currentMember.project}
+                      value={typeof currentMember.project === 'string' ? currentMember.project : currentMember.project._id}
                       onValueChange={(value) => handleEditChange(value, 'project')}
                     >
                       <SelectTrigger>
@@ -530,8 +768,101 @@ const Team = () => {
                       placeholder="Enter phone number"
                     />
                   </div>
+                  <div className="md:col-span-2">
+                    <Label htmlFor="edit-address">Address</Label>
+                    <Input
+                      id="edit-address"
+                      value={currentMember.address}
+                      onChange={(e) => handleEditChange(e, 'address')}
+                      placeholder="Enter full address"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-white mb-4">Bank Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-status">Status</Label>
+                    <Label htmlFor="editBankName">Bank Name</Label>
+                    <Input
+                      id="editBankName"
+                      value={currentMember.bankName}
+                      onChange={(e) => handleEditChange(e, 'bankName')}
+                      placeholder="Enter bank name"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label htmlFor="editBankAddress">Full Address of Bank</Label>
+                    <Input
+                      id="editBankAddress"
+                      value={currentMember.bankAddress}
+                      onChange={(e) => handleEditChange(e, 'bankAddress')}
+                      placeholder="Enter bank's full address"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editAccountHolder">Account Holder</Label>
+                    <Input
+                      id="editAccountHolder"
+                      value={currentMember.accountHolder}
+                      onChange={(e) => handleEditChange(e, 'accountHolder')}
+                      placeholder="Account holder name"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label htmlFor="editAccountHolderAddress">Account Holder Address</Label>
+                    <Input
+                      id="editAccountHolderAddress"
+                      value={currentMember.accountHolderAddress}
+                      onChange={(e) => handleEditChange(e, 'accountHolderAddress')}
+                      placeholder="Account holder address"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editAccount">Account Number</Label>
+                    <Input
+                      id="editAccount"
+                      value={currentMember.account}
+                      onChange={(e) => handleEditChange(e, 'account')}
+                      placeholder="Account number"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editAccountType">Account Type</Label>
+                    <Select
+                      value={currentMember.accountType}
+                      onValueChange={(value) => handleEditChange(value, 'accountType')}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select account type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Savings">Savings</SelectItem>
+                        <SelectItem value="Checking">Checking</SelectItem>
+                        <SelectItem value="Business">Business</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="editCharges">Charges This Week</Label>
+                    <Input
+                      id="editCharges"
+                      type="number"
+                      value={currentMember.charges}
+                      onChange={(e) => handleEditChange(e, 'charges')}
+                      placeholder="Enter charges"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editStatus">Status</Label>
                     <Select
                       value={currentMember.status}
                       onValueChange={(value) => handleEditChange(value, 'status')}
@@ -548,6 +879,7 @@ const Team = () => {
                   </div>
                 </div>
               </div>
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsEditMemberOpen(false)}>
                   Cancel

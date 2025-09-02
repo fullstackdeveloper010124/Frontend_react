@@ -50,62 +50,62 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         if (!backendProjects || backendProjects.length === 0) {
           console.log('No backend projects found, using sample projects as fallback');
           const sampleProjects: Project[] = [
-            // {
-            //   _id: 'project-1',
-            //   name: 'Website Redesign',
-            //   client: 'TechCorp Inc',
-            //   description: 'Complete website redesign and modernization',
-            //   startDate: new Date().toISOString(),
-            //   progress: 35,
-            //   team: 4,
-            //   hours: 120,
-            //   status: 'active',
-            //   assignedTeam: [],
-            //   budget: 15000,
-            //   priority: 'high'
-            // },
-            // {
-            //   _id: 'project-2',
-            //   name: 'Mobile App Development',
-            //   client: 'StartupXYZ',
-            //   description: 'Native mobile app for iOS and Android',
-            //   startDate: new Date().toISOString(),
-            //   progress: 60,
-            //   team: 5,
-            //   hours: 200,
-            //   status: 'active',
-            //   assignedTeam: [],
-            //   budget: 25000,
-            //   priority: 'high'
-            // },
-            // {
-            //   _id: 'project-3',
-            //   name: 'Marketing Campaign',
-            //   client: 'RetailCorp',
-            //   description: 'Digital marketing campaign and analytics',
-            //   startDate: new Date().toISOString(),
-            //   progress: 20,
-            //   team: 3,
-            //   hours: 80,
-            //   status: 'active',
-            //   assignedTeam: [],
-            //   budget: 10000,
-            //   priority: 'medium'
-            // },
-            // {
-            //   _id: 'project-4',
-            //   name: 'Internal Training',
-            //   client: 'Internal',
-            //   description: 'Employee training and development program',
-            //   startDate: new Date().toISOString(),
-            //   progress: 75,
-            //   team: 2,
-            //   hours: 40,
-            //   status: 'active',
-            //   assignedTeam: [],
-            //   budget: 5000,
-            //   priority: 'medium'
-            // }
+            {
+              _id: 'project-1',
+              name: 'Website Redesign',
+              client: 'TechCorp Inc',
+              description: 'Complete website redesign and modernization',
+              startDate: new Date().toISOString(),
+              progress: 35,
+              team: 4,
+              hours: 120,
+              status: 'active',
+              assignedTeam: [],
+              budget: 15000,
+              priority: 'high'
+            },
+            {
+              _id: 'project-2',
+              name: 'Mobile App Development',
+              client: 'StartupXYZ',
+              description: 'Native mobile app for iOS and Android',
+              startDate: new Date().toISOString(),
+              progress: 60,
+              team: 5,
+              hours: 200,
+              status: 'active',
+              assignedTeam: [],
+              budget: 25000,
+              priority: 'high'
+            },
+            {
+              _id: 'project-3',
+              name: 'Marketing Campaign',
+              client: 'RetailCorp',
+              description: 'Digital marketing campaign and analytics',
+              startDate: new Date().toISOString(),
+              progress: 20,
+              team: 3,
+              hours: 80,
+              status: 'active',
+              assignedTeam: [],
+              budget: 10000,
+              priority: 'medium'
+            },
+            {
+              _id: 'project-4',
+              name: 'Internal Training',
+              client: 'Internal',
+              description: 'Employee training and development program',
+              startDate: new Date().toISOString(),
+              progress: 75,
+              team: 2,
+              hours: 40,
+              status: 'active',
+              assignedTeam: [],
+              budget: 5000,
+              priority: 'medium'
+            }
           ];
           setProjects(sampleProjects);
           console.log('✅ Sample projects loaded:', sampleProjects.length);
@@ -200,7 +200,13 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   // Fetch tasks when project changes
   useEffect(() => {
     if (selectedProject) {
+      console.log('Project changed to:', selectedProject);
       fetchTasksByProject(selectedProject);
+      // Reset selected task when project changes
+      setSelectedTask('');
+    } else {
+      // If no project selected, show all tasks
+      fetchTasks();
     }
   }, [selectedProject]);
 
@@ -267,8 +273,23 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   };
 
   const startTimer = async () => {
-    if (!currentUser || !selectedProject || !selectedTask || !description) {
-      alert('Please fill in all required fields (project, task, description)');
+    if (!currentUser) {
+      alert('Please log in to start tracking time');
+      return;
+    }
+    
+    if (!selectedProject) {
+      alert('Please select a project');
+      return;
+    }
+    
+    if (!selectedTask) {
+      alert('Please select a task');
+      return;
+    }
+    
+    if (!description.trim()) {
+      alert('Please enter a description of what you are working on');
       return;
     }
 
