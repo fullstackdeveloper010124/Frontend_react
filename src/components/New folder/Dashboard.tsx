@@ -1,25 +1,49 @@
 
 import React from 'react';
 import { Clock, FileText, AlertCircle, Calendar } from 'lucide-react';
+import { type TimeEntry } from '@/lib/api';
 
 interface DashboardProps {
-  timeEntries: any[];
+  timeEntries: TimeEntry[];
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ timeEntries }) => {
+  const getProjectName = (project: any) => {
+    return typeof project === 'string' ? project : project?.name || 'Unknown Project';
+  };
+
   const totalHours = timeEntries.reduce((acc, entry) => {
-    const [hours, minutes] = entry.time.split(':').map(Number);
-    return acc + hours + minutes / 60;
+    return acc + (entry.duration / 60); // Convert minutes to hours
   }, 0);
 
   const billableHours = timeEntries
     .filter(entry => entry.billable)
     .reduce((acc, entry) => {
-      const [hours, minutes] = entry.time.split(':').map(Number);
-      return acc + hours + minutes / 60;
+      return acc + (entry.duration / 60); // Convert minutes to hours
     }, 0);
 
-  const activeProjects = [...new Set(timeEntries.map(entry => entry.project))].length;
+  const activeProjects = [...new Set(timeEntries.map(entry => getProjectName(entry.project)))].length;
+
+  // Get unique projects with their time data
+  const projectSummary = timeEntries.reduce((acc, entry) => {
+    const projectName = getProjectName(entry.project);
+    if (!acc[projectName]) {
+      acc[projectName] = {
+        name: projectName,
+        totalHours: 0,
+        billableHours: 0,
+        entryCount: 0
+      };
+    }
+    acc[projectName].totalHours += entry.duration / 60;
+    if (entry.billable) {
+      acc[projectName].billableHours += entry.duration / 60;
+    }
+    acc[projectName].entryCount += 1;
+    return acc;
+  }, {} as Record<string, { name: string; totalHours: number; billableHours: number; entryCount: number }>);
+
+  const projectList = Object.values(projectSummary);
 
   const stats = [
     {
@@ -83,7 +107,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ timeEntries }) => {
                 {stat.change}
               </p>
             </div>
-            <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
+            <div className={`p-3 rounded-lg ${stat.bgColor}`}>
               <stat.icon className={`w-6 h-6 ${stat.color.replace('bg-', 'text-')}`} />
             </div>
           </div>

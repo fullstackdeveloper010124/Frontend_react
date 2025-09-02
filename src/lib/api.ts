@@ -31,6 +31,17 @@ export const API_URLS = {
   
   // Leave
   leave: `${API_BASE_URL}/leave`,
+  
+  // Time Entries
+  timeEntries: `${API_BASE_URL}/time-entries`,
+  timeEntriesStart: `${API_BASE_URL}/time-entries/start`,
+  timeEntriesStop: (id: string) => `${API_BASE_URL}/time-entries/stop/${id}`,
+  timeEntriesSummary: (userId: string) => `${API_BASE_URL}/time-entries/summary/${userId}`,
+  
+  // Tasks
+  tasks: `${API_BASE_URL}/tasks`,
+  tasksByProject: (projectId: string) => `${API_BASE_URL}/tasks/project/${projectId}`,
+  tasksByUser: (userId: string) => `${API_BASE_URL}/tasks/user/${userId}`,
 };
 
 // Create axios instance with default config
@@ -178,10 +189,48 @@ export interface TeamMember {
   accountHolderAddress?: string;
   account?: string;
   accountType?: string;
-  hoursThisWeek?: number;
+  charges?: number;
   status?: string;
   role?: string;
   isUser?: boolean; // Flag to identify if this came from User collection (signup)
+}
+
+// Time Entry types
+export interface TimeEntry {
+  _id: string;
+  userId: string | User;
+  project: string | Project;
+  task: string | Task;
+  description: string;
+  startTime: string;
+  endTime?: string;
+  duration: number; // in minutes
+  billable: boolean;
+  status: 'In Progress' | 'Completed' | 'Paused';
+  trackingType: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+  isManualEntry: boolean;
+  hourlyRate: number;
+  totalAmount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Task types
+export interface Task {
+  _id: string;
+  name: string;
+  description?: string;
+  project: string | Project;
+  assignedTo?: string | User;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'todo' | 'in-progress' | 'completed' | 'on-hold';
+  estimatedHours: number;
+  actualHours: number;
+  dueDate?: string;
+  tags: string[];
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Authentication API functions
@@ -392,9 +441,27 @@ export const projectAPI = {
   getAllProjects: async (): Promise<ApiResponse<Project[]>> => {
     try {
       const response = await apiClient.get('/projects/all');
-      return response.data;
-    } catch (error) {
-      throw error;
+      console.log('Raw API response:', response);
+      console.log('Response data type:', typeof response.data);
+      console.log('Is array:', Array.isArray(response.data));
+      
+      // Backend returns array directly, so wrap it in our expected format
+      if (Array.isArray(response.data)) {
+        console.log('✅ Wrapping array response in ApiResponse format');
+        return { success: true, data: response.data };
+      } else if (response.data?.success && response.data?.data) {
+        console.log('✅ Response already in ApiResponse format');
+        return response.data;
+      }
+      
+      console.log('⚠️ Unexpected response format, returning empty');
+      return { success: false, data: [], error: 'Unexpected response format' };
+    } catch (error: any) {
+      console.error('Project API error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error response:', error.response?.data);
+      // Return empty array on error so UI can show fallback
+      return { success: false, data: [], error: error.message || 'Unknown error' };
     }
   },
 
@@ -511,6 +578,193 @@ export const leaveAPI = {
   deleteLeaveApplication: async (id: string): Promise<ApiResponse> => {
     try {
       const response = await apiClient.delete(`/leave/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+};
+
+// Time Entry API functions
+export const timeEntryAPI = {
+  getAllTimeEntries: async (filters?: {
+    userId?: string;
+    startDate?: string;
+    endDate?: string;
+    project?: string;
+    status?: string;
+  }): Promise<ApiResponse<TimeEntry[]>> => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value);
+        });
+      }
+      
+      const response = await apiClient.get(`/time-entries?${queryParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  createTimeEntry: async (timeEntryData: {
+    userId: string;
+    project: string;
+    task: string;
+    description: string;
+    startTime: string;
+    endTime?: string;
+    billable?: boolean;
+    trackingType?: string;
+    isManualEntry?: boolean;
+    hourlyRate?: number;
+  }): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.post('/time-entries', timeEntryData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  startTimer: async (timerData: {
+    userId: string;
+    project: string;
+    task: string;
+    description: string;
+    trackingType?: string;
+  }): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.post('/time-entries/start', timerData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  stopTimer: async (timeEntryId: string): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.put(`/time-entries/stop/${timeEntryId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  updateTimeEntry: async (id: string, updateData: Partial<TimeEntry>): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.put(`/time-entries/${id}`, updateData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  deleteTimeEntry: async (id: string): Promise<ApiResponse> => {
+    try {
+      const response = await apiClient.delete(`/time-entries/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getUserSummary: async (userId: string, startDate?: string, endDate?: string): Promise<ApiResponse<{
+    summary: {
+      totalHours: number;
+      billableHours: number;
+      totalEntries: number;
+      period: { start: string; end: string };
+    };
+    recentEntries: TimeEntry[];
+  }>> => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (startDate) queryParams.append('startDate', startDate);
+      if (endDate) queryParams.append('endDate', endDate);
+      
+      const response = await apiClient.get(`/time-entries/summary/${userId}?${queryParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+};
+
+// Task API functions
+export const taskAPI = {
+  getAllTasks: async (filters?: {
+    project?: string;
+    assignedTo?: string;
+    status?: string;
+  }): Promise<ApiResponse<Task[]>> => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value);
+        });
+      }
+      
+      const response = await apiClient.get(`/tasks?${queryParams.toString()}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getTasksByProject: async (projectId: string, status?: string): Promise<ApiResponse<Task[]>> => {
+    try {
+      const queryParams = status ? `?status=${status}` : '';
+      const response = await apiClient.get(`/tasks/project/${projectId}${queryParams}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getUserTasks: async (userId: string, status?: string): Promise<ApiResponse<Task[]>> => {
+    try {
+      const queryParams = status ? `?status=${status}` : '';
+      const response = await apiClient.get(`/tasks/user/${userId}${queryParams}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  createTask: async (taskData: Omit<Task, '_id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await apiClient.post('/tasks', taskData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  updateTask: async (id: string, taskData: Partial<Task>): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await apiClient.put(`/tasks/${id}`, taskData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  deleteTask: async (id: string): Promise<ApiResponse> => {
+    try {
+      const response = await apiClient.delete(`/tasks/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getTaskById: async (id: string): Promise<ApiResponse<Task>> => {
+    try {
+      const response = await apiClient.get(`/tasks/${id}`);
       return response.data;
     } catch (error) {
       throw error;

@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import axios from 'axios';
 import { toast } from '@/hooks/use-toast';
-import API_URLS from '@/lib/api';
+import { API_URLS } from '@/lib/api';
 
 const Team = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -86,7 +86,7 @@ const Team = () => {
       try {
         const res = await axios.post(API_URLS.teamAdd, {
           ...newMember,
-          hoursThisWeek: 0,
+          charges: 0,
           status: 'Active'
         });
 
@@ -202,9 +202,9 @@ const Team = () => {
   };
 
 
-  const totalHours = teamMembers.reduce((sum, m) => sum + (m.hoursThisWeek || 0), 0);
+  const totalCharges = teamMembers.reduce((sum, m) => sum + (m.charges || 0), 0);
   const activeMembers = teamMembers.filter(m => m.status === 'Active').length;
-  const avgHours = teamMembers.length > 0 ? (totalHours / teamMembers.length).toFixed(1) : '0';
+  const avgCharges = teamMembers.length > 0 ? (totalCharges / teamMembers.length).toFixed(1) : '0';
 
   return (
     <ThemeProvider>
@@ -388,84 +388,77 @@ const Team = () => {
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{teamMembers.length}</p>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Active This Week</h3>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Members</h3>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{activeMembers}</p>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Hours</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{totalHours}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Charges</h3>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">${totalCharges}</p>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Hours/Member</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{avgHours}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Charges</h3>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">${avgCharges}</p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-900/40">
-                  <tr>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">ID</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Name</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Project</th> {/* Changed to Project */}
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Email</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Phone</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Address</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Bank</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Holder</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Type</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Hours</th>
-                    <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
-                    <th className="px-6 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {teamMembers.map((member, idx) => (
-                    <tr key={idx}>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.employeeId}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-900 dark:text-white font-medium">{member.name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                        {member.project ? member.project.name : 'N/A'} {/* Display project name */}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.phone}</td>
-                      <td className="px-6 py-4 max-w-xs text-gray-600 dark:text-gray-300 truncate">{member.address}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.bankName}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountHolder}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.account}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountType}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.hoursThisWeek}h</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          member.status === 'Active'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                        }`}>
-                          {member.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mr-2"
-                          onClick={() => openEditModal(member)}
-                        >
-                          <Edit className="w-4 h-4 mr-1" /> Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => confirmDelete(member._id)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" /> Delete
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Team Members Table */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Team Members</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Employee ID</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Name</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Project</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Email</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Status</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamMembers.map((member) => (
+                        <tr key={member._id} className="border-b border-gray-100 dark:border-gray-700">
+                          <td className="py-3 px-4 text-gray-900 dark:text-white">{member.employeeId}</td>
+                          <td className="py-3 px-4 text-gray-900 dark:text-white">{member.name}</td>
+                          <td className="py-3 px-4 text-gray-900 dark:text-white">
+                            {member.project ? member.project.name : 'No Project'}
+                          </td>
+                          <td className="py-3 px-4 text-gray-900 dark:text-white">{member.email}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              member.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                              member.status === 'Inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                            }`}>
+                              {member.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditModal(member)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => confirmDelete(member._id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </main>
         </div>
@@ -483,28 +476,27 @@ const Team = () => {
                 <h3 className="font-medium text-gray-900 dark:text-white mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="editEmployeeId">Employee ID</Label>
+                    <Label htmlFor="edit-employeeId">Employee ID</Label>
                     <Input
-                      id="editEmployeeId"
+                      id="edit-employeeId"
                       value={currentMember.employeeId}
                       readOnly
                       className="bg-gray-100 dark:bg-gray-700"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editName">Name *</Label>
+                    <Label htmlFor="edit-name">Name *</Label>
                     <Input
-                      id="editName"
+                      id="edit-name"
                       value={currentMember.name}
                       onChange={(e) => handleEditChange(e, 'name')}
                       placeholder="Enter member name"
                     />
                   </div>
                   <div>
-                    {/* Updated Select for Project in Edit */}
-                    <Label htmlFor="editProject">Project *</Label>
+                    <Label htmlFor="edit-project">Project *</Label>
                     <Select
-                      value={currentMember.project} // This should be the project _id
+                      value={currentMember.project}
                       onValueChange={(value) => handleEditChange(value, 'project')}
                     >
                       <SelectTrigger>
@@ -520,9 +512,9 @@ const Team = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="editEmail">Email *</Label>
+                    <Label htmlFor="edit-email">Email *</Label>
                     <Input
-                      id="editEmail"
+                      id="edit-email"
                       type="email"
                       value={currentMember.email}
                       onChange={(e) => handleEditChange(e, 'email')}
@@ -530,110 +522,16 @@ const Team = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="editPhone">Phone</Label>
+                    <Label htmlFor="edit-phone">Phone</Label>
                     <Input
-                      id="editPhone"
+                      id="edit-phone"
                       value={currentMember.phone}
                       onChange={(e) => handleEditChange(e, 'phone')}
                       placeholder="Enter phone number"
                     />
                   </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="editAddress">Address</Label>
-                    <Input
-                      id="editAddress"
-                      value={currentMember.address}
-                      onChange={(e) => handleEditChange(e, 'address')}
-                      placeholder="Enter full address"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white mb-4">Bank Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="editBankName">Bank Name</Label>
-                    <Input
-                      id="editBankName"
-                      value={currentMember.bankName}
-                      onChange={(e) => handleEditChange(e, 'bankName')}
-                      placeholder="Enter bank name"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="editBankAddress">Full Address of Bank</Label>
-                    <Input
-                      id="editBankAddress"
-                      value={currentMember.bankAddress}
-                      onChange={(e) => handleEditChange(e, 'bankAddress')}
-                      placeholder="Enter bank's full address"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editAccountHolder">Account Holder</Label>
-                    <Input
-                      id="editAccountHolder"
-                      value={currentMember.accountHolder}
-                      onChange={(e) => handleEditChange(e, 'accountHolder')}
-                      placeholder="Account holder name"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="editAccountHolderAddress">Account Holder Address</Label>
-                    <Input
-                      id="editAccountHolderAddress"
-                      value={currentMember.accountHolderAddress}
-                      onChange={(e) => handleEditChange(e, 'accountHolderAddress')}
-                      placeholder="Account holder address"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editAccount">Account Number</Label>
-                    <Input
-                      id="editAccount"
-                      value={currentMember.account}
-                      onChange={(e) => handleEditChange(e, 'account')}
-                      placeholder="Account number"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editAccountType">Account Type</Label>
-                    <Select
-                      value={currentMember.accountType}
-                      onValueChange={(value) => handleEditChange(value, 'accountType')}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select account type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Savings">Savings</SelectItem>
-                        <SelectItem value="Checking">Checking</SelectItem>
-                        <SelectItem value="Business">Business</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status and Hours for editing */}
-              <div>
-                <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="editHoursThisWeek">Hours This Week</Label>
-                    <Input
-                      id="editHoursThisWeek"
-                      type="number"
-                      value={currentMember.hoursThisWeek}
-                      onChange={(e) => handleEditChange(e, 'hoursThisWeek')}
-                      placeholder="Enter hours"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="editStatus">Status</Label>
+                    <Label htmlFor="edit-status">Status</Label>
                     <Select
                       value={currentMember.status}
                       onValueChange={(value) => handleEditChange(value, 'status')}
@@ -650,8 +548,6 @@ const Team = () => {
                   </div>
                 </div>
               </div>
-
-
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsEditMemberOpen(false)}>
                   Cancel

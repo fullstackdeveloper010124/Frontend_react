@@ -26,7 +26,7 @@ interface NewMember {
   account: string;
   accountType: string;
   role: string;
-  hoursThisWeek: number;
+  charges: number;
   status: string;
 }
 
@@ -57,7 +57,7 @@ const Team = () => {
     account: '',
     accountType: '',
     role: 'Employee',
-    hoursThisWeek: 0,
+    charges: 0,
     status: 'Active'
   });
 
@@ -161,7 +161,7 @@ const Team = () => {
       try {
         const res = await teamAPI.addTeamMember({
           ...newMember,
-          hoursThisWeek: 0,
+          charges: 0,
           status: 'Active'
         });
 
@@ -188,7 +188,7 @@ const Team = () => {
           account: '',
           accountType: '',
           role: 'Employee',
-          hoursThisWeek: 0,
+          charges: 0,
           status: 'Active'
         });
 
@@ -324,7 +324,7 @@ const Team = () => {
         accountHolderAddress: '',
         account: '',
         accountType: '',
-        hoursThisWeek: 0,
+        charges: 0,
         status: 'Active',
         role: user.role,
         isUser: true
@@ -351,9 +351,9 @@ const Team = () => {
     }
   };
 
-  const totalHours = teamMembers.reduce((sum, m) => sum + (m.hoursThisWeek || 0), 0);
+  const totalCharges = teamMembers.reduce((sum, m) => sum + (m.charges || 0), 0);
   const activeMembers = teamMembers.filter(m => m.status === 'Active').length;
-  const avgHours = teamMembers.length > 0 ? (totalHours / teamMembers.length).toFixed(1) : '0';
+  const avgcharges = teamMembers.length > 0 ? (totalCharges / teamMembers.length).toFixed(1) : '0';
 
   // Show loading state
   if (loading) {
@@ -538,14 +538,14 @@ const Team = () => {
                       <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="hoursThisWeek">Hours This Week</Label>
+                          <Label htmlFor="charges">charges This Week</Label>
                           <Input
-                            id="hoursThisWeek"
+                            id="charges"
                             type="number"
                             min="0"
-                            value={newMember.hoursThisWeek}
-                            onChange={(e) => setNewMember({ ...newMember, hoursThisWeek: parseInt(e.target.value) || 0 })}
-                            placeholder="Enter hours"
+                            value={newMember.charges}
+                            onChange={(e) => setNewMember({ ...newMember, charges: parseInt(e.target.value) || 0 })}
+                            placeholder="Enter charges"
                           />
                         </div>
                         <div>
@@ -658,12 +658,12 @@ const Team = () => {
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{activeMembers}</p>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Hours</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{totalHours}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total charges</h3>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{totalCharges}</p>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Hours/Member</h3>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{avgHours}</p>
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg charges/Member</h3>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-2">{avgcharges}</p>
               </div>
             </div>
 
@@ -691,7 +691,7 @@ const Team = () => {
                       <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Holder</th>
                       <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account</th>
                       <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Account Type</th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Hours</th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Charges</th>
                       <th className="px-6 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Status</th>
                       <th className="px-6 py-3 text-center font-medium text-gray-500 dark:text-gray-400">Actions</th>
                     </tr>
@@ -731,7 +731,7 @@ const Team = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountHolder}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.account}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.accountType}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.hoursThisWeek || 0}h</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-300">{member.charges || 0}h</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             member.status === 'Active'
@@ -917,18 +917,18 @@ const Team = () => {
                 </div>
               </div>
 
-              {/* Status and Hours for editing */}
+              {/* Status and charges for editing */}
               <div>
                 <h3 className="font-medium text-gray-900 dark:text-white mb-4">Work Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="editHoursThisWeek">Hours This Week</Label>
+                    <Label htmlFor="editcharges">Charges This Week</Label>
                     <Input
-                      id="editHoursThisWeek"
+                      id="editcharges"
                       type="number"
-                      value={currentMember.hoursThisWeek}
-                      onChange={(e) => handleEditChange(e, 'hoursThisWeek')}
-                      placeholder="Enter hours"
+                      value={currentMember.charges}
+                      onChange={(e) => handleEditChange(e, 'charges')}
+                      placeholder="Enter charges"
                     />
                   </div>
                   <div>

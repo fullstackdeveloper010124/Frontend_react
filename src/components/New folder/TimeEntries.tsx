@@ -8,15 +8,16 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { type TimeEntry } from '@/lib/api';
 
 interface TimeEntriesProps {
-  entries: any[];
-  onDelete: (id: number) => void;
-  onUpdate: (id: number, entry: any) => void;
+  entries: TimeEntry[];
+  onDelete: (id: string) => void;
+  onUpdate: (id: string, entry: Partial<TimeEntry>) => void;
 }
 
 export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onUpdate }) => {
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -24,16 +25,33 @@ export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onU
         return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400';
       case 'In Progress':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400';
-      case 'Pending':
+      case 'Paused':
         return 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400';
     }
   };
 
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}:${mins.toString().padStart(2, '0')}:00`;
+  };
+
+  const getProjectName = (project: any) => {
+    return typeof project === 'string' ? project : project?.name || 'Unknown Project';
+  };
+
+  const getTaskName = (task: any) => {
+    return typeof task === 'string' ? task : task?.name || 'Unknown Task';
+  };
+
+  const getUserName = (user: any) => {
+    return typeof user === 'string' ? user : user?.name || 'Current User';
+  };
+
   const totalTime = entries.reduce((acc, entry) => {
-    const [hours, minutes] = entry.time.split(':').map(Number);
-    return acc + hours + minutes / 60;
+    return acc + (entry.duration / 60); // Convert minutes to hours
   }, 0);
 
   return (
@@ -73,33 +91,33 @@ export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onU
         <div className="space-y-3">
           {entries.map((entry) => (
             <div 
-              key={entry.id} 
+              key={entry._id} 
               className="grid grid-cols-1 md:grid-cols-7 gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="md:col-span-1">
                 <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {entry.project}
+                  {getProjectName(entry.project)}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 md:hidden">
-                  {entry.task} • {entry.employeeName || entry.assignedTo || 'Unassigned'}
+                  {getTaskName(entry.task)} • {getUserName(entry.userId)}
                 </div>
               </div>
               
               <div className="hidden md:block">
                 <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                  {entry.task}
+                  {getTaskName(entry.task)}
                 </div>
               </div>
               
               <div className="hidden md:block">
                 <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                  {entry.employeeName || entry.assignedTo || 'Unassigned'}
+                  {getUserName(entry.userId)}
                 </div>
               </div>
               
               <div>
                 <div className="text-sm font-mono font-medium text-gray-900 dark:text-white">
-                  {entry.time}
+                  {formatDuration(entry.duration)}
                 </div>
               </div>
               
@@ -121,10 +139,10 @@ export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onU
               </div>
               
               <div className="flex justify-end space-x-2">
-                <Button size="sm" variant="ghost" onClick={() => setEditingId(entry.id)}>
+                <Button size="sm" variant="ghost" onClick={() => setEditingId(entry._id)}>
                   <Edit3 className="w-4 h-4" />
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => onDelete(entry.id)}>
+                <Button size="sm" variant="ghost" onClick={() => onDelete(entry._id)}>
                   <Trash2 className="w-4 h-4 text-red-500" />
                 </Button>
               </div>

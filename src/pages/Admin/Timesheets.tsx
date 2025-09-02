@@ -1,20 +1,69 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar/AdminSidebar';
 import { Header } from '@/components/navbar/AdminHeader';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import { Calendar, Clock, Filter, Download } from 'lucide-react';
-import API_URLS from '@/lib/api';
+import { Calendar, Clock, Filter, Download, Loader2 } from 'lucide-react';
+import { timeEntryAPI, type TimeEntry } from '@/lib/api';
 
 const Timesheets = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    project: '',
+    status: ''
+  });
 
-  const timesheetData = [
-    { date: '2024-01-15', project: 'Website Redesign', task: 'Homepage Design', hours: '8.0', status: 'Approved', billable: true },
-    { date: '2024-01-14', project: 'Mobile App', task: 'API Integration', hours: '7.5', status: 'Pending', billable: true },
-    { date: '2024-01-13', project: 'Marketing Campaign', task: 'Campaign Setup', hours: '6.0', status: 'Approved', billable: false },
-    { date: '2024-01-12', project: 'Internal Training', task: 'Team Meeting', hours: '4.0', status: 'Approved', billable: false },
-  ];
+  // Fetch time entries on component mount
+  useEffect(() => {
+    fetchTimeEntries();
+  }, []);
+
+  const fetchTimeEntries = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await timeEntryAPI.getAllTimeEntries(filters);
+      
+      if (response.success && response.data) {
+        setTimeEntries(response.data);
+      } else {
+        setError('Failed to fetch time entries');
+      }
+    } catch (err) {
+      console.error('Error fetching time entries:', err);
+      setError('Failed to fetch time entries');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}.${mins.toString().padStart(2, '0')}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const getProjectName = (project: any) => {
+    return typeof project === 'string' ? project : project?.name || 'Unknown Project';
+  };
+
+  const getTaskName = (task: any) => {
+    return typeof task === 'string' ? task : task?.name || 'Unknown Task';
+  };
+
+  const getUserName = (user: any) => {
+    return typeof user === 'string' ? user : user?.name || 'Unknown User';
+  };
 
   return (
     <ThemeProvider>
@@ -82,33 +131,69 @@ const Timesheets = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {timesheetData.map((entry, index) => (
-                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{entry.date}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{entry.project}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{entry.task}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white flex items-center">
-                          <Clock className="w-4 h-4 mr-1 text-gray-400" />
-                          {entry.hours}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            entry.status === 'Approved' ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 
-                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-                          }`}>
-                            {entry.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            entry.billable ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' : 
-                            'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                          }`}>
-                            {entry.billable ? 'Billable' : 'Non-billable'}
-                          </span>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center">
+                          <div className="flex items-center justify-center">
+                            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                            <span className="text-gray-500 dark:text-gray-400">Loading time entries...</span>
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : error ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center">
+                          <div className="text-red-600 dark:text-red-400">{error}</div>
+                          <button 
+                            onClick={fetchTimeEntries}
+                            className="mt-2 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+                          >
+                            Try again
+                          </button>
+                        </td>
+                      </tr>
+                    ) : timeEntries.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                          No time entries found
+                        </td>
+                      </tr>
+                    ) : (
+                      timeEntries.map((entry) => (
+                        <tr key={entry._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {formatDate(entry.createdAt || '')}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {getProjectName(entry.project)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                            {getTaskName(entry.task)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white flex items-center">
+                            <Clock className="w-4 h-4 mr-1 text-gray-400" />
+                            {formatDuration(entry.duration)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              entry.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 
+                              entry.status === 'In Progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' :
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
+                            }`}>
+                              {entry.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              entry.billable ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' : 
+                              'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+                            }`}>
+                              {entry.billable ? 'Billable' : 'Non-billable'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

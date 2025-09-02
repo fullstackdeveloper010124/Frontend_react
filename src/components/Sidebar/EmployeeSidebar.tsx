@@ -61,11 +61,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             </div>
           </div>
           
-          {/* Quick Start Button */}
+          {/* Quick Start Button
           <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-lg flex items-center justify-center mb-6 transition-colors">
             <Plus className="w-4 h-4 mr-2" />
             Start Timer
-          </button>
+          </button> */}
           
           {/* Navigation */}
           <nav className="space-y-2">

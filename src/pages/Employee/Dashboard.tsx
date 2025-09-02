@@ -1,44 +1,75 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar/EmployeeSidebar';
 import { Header } from '@/components/navbar/EmployeeHeader';
-import { Dashboard } from '@/components/New folder/Dashboard';
 import { TimeTracker } from '@/components/New folder/TimeTracker';
 import { TimeEntries } from '@/components/New folder/TimeEntries';
 import { WeeklySummary } from '@/components/New folder/WeeklySummary';
 import { RecentActivity } from '@/components/New folder/RecentActivity';
 import { UpcomingDeadlines } from '@/components/New folder/UpcomingDeadlines';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import API_URLS from '@/lib/api';
+import { timeEntryAPI, type TimeEntry } from '@/lib/api';
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTimer, setActiveTimer] = useState(null);
-  const [timeEntries, setTimeEntries] = useState([
-    { 
-      id: 1, 
-      project: 'Website Redesign', 
-      task: 'Homepage Design', 
-      time: '3:30:00', 
-      status: 'In Progress', 
-      billable: true, 
-      employeeName: 'John Smith',
-      date: new Date(),
-      description: 'Working on the hero section and navigation'
-    },
-  ]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
-  const addTimeEntry = (entry) => {
-    setTimeEntries(prev => [...prev, { ...entry, id: Date.now(), date: new Date(), employeeName: entry.employeeName }]);
+  // Fetch user's time entries on component mount
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        setLoading(true);
+        
+        // Get current user
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+          
+          // Fetch user's time entries
+          const response = await timeEntryAPI.getAllTimeEntries({ userId: user._id });
+          if (response.success && response.data) {
+            setTimeEntries(response.data);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch time entries:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeData();
+  }, []);
+
+  const addTimeEntry = (entry: TimeEntry) => {
+    setTimeEntries(prev => [...prev, entry]);
   };
 
-  const deleteTimeEntry = (id) => {
-    setTimeEntries(prev => prev.filter(entry => entry.id !== id));
+  const deleteTimeEntry = async (id: string) => {
+    try {
+      const response = await timeEntryAPI.deleteTimeEntry(id);
+      if (response.success) {
+        setTimeEntries(prev => prev.filter(entry => entry._id !== id));
+      }
+    } catch (error) {
+      console.error('Failed to delete time entry:', error);
+    }
   };
 
-  const updateTimeEntry = (id, updatedEntry) => {
-    setTimeEntries(prev => prev.map(entry => 
-      entry.id === id ? { ...entry, ...updatedEntry } : entry
-    ));
+  const updateTimeEntry = async (id: string, updatedEntry: Partial<TimeEntry>) => {
+    try {
+      const response = await timeEntryAPI.updateTimeEntry(id, updatedEntry);
+      if (response.success && response.data) {
+        setTimeEntries(prev => prev.map(entry => 
+          entry._id === id ? response.data! : entry
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to update time entry:', error);
+    }
   };
 
   return (
@@ -53,8 +84,6 @@ const Index = () => {
           <Header onMenuClick={() => setSidebarOpen(true)} />
           
           <main className="p-6 space-y-6">
-            <Dashboard timeEntries={timeEntries} />
-            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                 <TimeTracker 
