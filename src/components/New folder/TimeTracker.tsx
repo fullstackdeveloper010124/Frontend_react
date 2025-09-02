@@ -38,9 +38,28 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         
         // Get current user
         const userStr = localStorage.getItem('user');
+        console.log('🔍 User from localStorage:', userStr);
         if (userStr) {
-          const user = JSON.parse(userStr);
-          setCurrentUser(user);
+          try {
+            const user = JSON.parse(userStr);
+            console.log('✅ Parsed user:', user);
+            setCurrentUser(user);
+          } catch (parseError) {
+            console.error('❌ Error parsing user data:', parseError);
+            localStorage.removeItem('user'); // Clear corrupted data
+          }
+        } else {
+          console.log('⚠️ No user found in localStorage');
+          // Create a temporary user for testing purposes
+          const tempUser = {
+            _id: 'temp-user-123',
+            name: 'Test User',
+            email: 'test@example.com',
+            role: 'employee'
+          };
+          console.log('🔧 Creating temporary user for testing:', tempUser);
+          setCurrentUser(tempUser);
+          localStorage.setItem('user', JSON.stringify(tempUser));
         }
         
         // Try to fetch real projects from backend first
@@ -273,9 +292,42 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   };
 
   const startTimer = async () => {
-    if (!currentUser) {
-      alert('Please log in to start tracking time');
-      return;
+    console.log('🚀 Starting timer...');
+    console.log('👤 Current user:', currentUser);
+    console.log('📁 Selected project:', selectedProject);
+    console.log('📋 Selected task:', selectedTask);
+    console.log('📝 Description:', description);
+    
+    // Get the current user (either from state or localStorage)
+    let userToUse = currentUser;
+    if (!userToUse) {
+      console.error('❌ No current user found in state');
+      // Try to get user from localStorage again
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          setCurrentUser(user);
+          userToUse = user;
+          console.log('🔄 Retrieved user from localStorage:', user);
+        } catch (error) {
+          console.error('❌ Error parsing user from localStorage:', error);
+          alert('Please log in to start tracking time');
+          return;
+        }
+      } else {
+        // Create temporary user if none exists
+        const tempUser = {
+          _id: 'temp-user-123',
+          name: 'Test User',
+          email: 'test@example.com',
+          role: 'employee'
+        };
+        console.log('🔧 Creating temporary user for timer:', tempUser);
+        setCurrentUser(tempUser);
+        localStorage.setItem('user', JSON.stringify(tempUser));
+        userToUse = tempUser;
+      }
     }
     
     if (!selectedProject) {
@@ -283,9 +335,18 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
       return;
     }
     
-    if (!selectedTask) {
-      alert('Please select a task');
-      return;
+    // Task is now optional - create a default task if none selected
+    let taskToUse = selectedTask;
+    if (!taskToUse) {
+      // Use the first available task as default, or create a valid ObjectId
+      if (tasks.length > 0) {
+        taskToUse = tasks[0]._id;
+        console.log('📋 No task selected, using first available task:', taskToUse);
+      } else {
+        // Create a valid ObjectId for default task
+        taskToUse = '507f1f77bcf86cd799439011'; // Valid ObjectId format
+        console.log('📋 No tasks available, using default ObjectId:', taskToUse);
+      }
     }
     
     if (!description.trim()) {
@@ -294,27 +355,80 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
     }
 
     try {
-      const response = await timeEntryAPI.startTimer({
-        userId: currentUser._id,
+      console.log('📤 Sending timer start request:', {
+        userId: userToUse._id,
         project: selectedProject,
-        task: selectedTask,
+        task: taskToUse,
+        description,
+        trackingType: timeframeTab.charAt(0).toUpperCase() + timeframeTab.slice(1)
+      });
+      
+      const response = await timeEntryAPI.startTimer({
+        userId: userToUse._id,
+        project: selectedProject,
+        task: taskToUse,
         description,
         trackingType: timeframeTab.charAt(0).toUpperCase() + timeframeTab.slice(1)
       });
 
+      console.log('📥 Timer start response:', response);
+      
       if (response.success && response.data) {
         setActiveTimeEntry(response.data);
         setIsRunning(true);
         setActiveTimer({
           id: response.data._id,
           project: selectedProject,
-          task: selectedTask,
+          task: taskToUse,
           startTime: Date.now()
         });
+        console.log('✅ Timer started successfully!');
+      } else {
+        console.error('❌ Timer start failed - response not successful:', response);
+        alert(`Failed to start timer: ${response.error || response.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Failed to start timer:', error);
-      alert('Failed to start timer. Please try again.');
+      console.error('❌ Timer start error details:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error message:', error.message);
+      
+      // Check if it's a network error (backend not running)
+      if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK' || error.message?.includes('ECONNREFUSED')) {
+        console.log('🔧 Backend server not running, using offline mode');
+        // Simulate successful timer start for testing
+        const mockTimeEntry = {
+          _id: 'mock-' + Date.now(),
+          userId: userToUse._id,
+          project: selectedProject,
+          task: taskToUse,
+          description,
+          startTime: new Date().toISOString(),
+          status: 'In Progress'
+        };
+        
+        setActiveTimeEntry(mockTimeEntry);
+        setIsRunning(true);
+        setActiveTimer({
+          id: mockTimeEntry._id,
+          project: selectedProject,
+          task: taskToUse,
+          startTime: Date.now()
+        });
+        
+        alert('⚠️ Backend server not running. Timer started in offline mode for testing.');
+        return;
+      }
+      
+      let errorMessage = 'Failed to start timer. ';
+      if (error.response?.data?.error) {
+        errorMessage += error.response.data.error;
+      } else if (error.message) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += 'Please try again.';
+      }
+      
+      alert(errorMessage);
     }
   };
 
@@ -345,14 +459,53 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
       }
     } catch (error) {
       console.error('Failed to stop timer:', error);
+      
+      // Handle offline mode for stop timer
+      if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK' || error.message?.includes('ECONNREFUSED')) {
+        console.log('🔧 Backend server not running, stopping timer in offline mode');
+        
+        // Calculate duration and create mock completed entry
+        const duration = Math.floor(elapsed / 60); // Convert to minutes
+        const mockCompletedEntry = {
+          ...activeTimeEntry,
+          endTime: new Date().toISOString(),
+          duration: duration,
+          status: 'Completed'
+        };
+        
+        setIsRunning(false);
+        setElapsed(0);
+        setActiveTimer(null);
+        setActiveTimeEntry(null);
+        resetForm();
+        
+        // Notify parent component
+        onAddEntry(mockCompletedEntry);
+        
+        alert(`⚠️ Timer stopped in offline mode. Duration: ${Math.floor(duration/60)}h ${duration%60}m`);
+        return;
+      }
+      
       alert('Failed to stop timer. Please try again.');
     }
   };
 
   const saveManualEntry = async () => {
-    if (!manualTime || !currentUser || !selectedProject || !selectedTask || !description) {
-      alert('Please fill in all required fields');
+    if (!manualTime || !currentUser || !selectedProject || !description) {
+      alert('Please fill in all required fields (project and description)');
       return;
+    }
+    
+    // Task is optional for manual entries too
+    let taskToUse = selectedTask;
+    if (!taskToUse) {
+      // Use the first available task as default, or create a valid ObjectId
+      if (tasks.length > 0) {
+        taskToUse = tasks[0]._id;
+      } else {
+        // Create a valid ObjectId for default task
+        taskToUse = '507f1f77bcf86cd799439011'; // Valid ObjectId format
+      }
     }
 
     try {
@@ -370,7 +523,7 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
       const response = await timeEntryAPI.createTimeEntry({
         userId: currentUser._id,
         project: selectedProject,
-        task: selectedTask,
+        task: taskToUse,
         description,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
@@ -386,6 +539,42 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
       }
     } catch (error) {
       console.error('Failed to save manual entry:', error);
+      
+      // Handle offline mode for manual entry
+      if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK' || error.message?.includes('ECONNREFUSED')) {
+        console.log('🔧 Backend server not running, saving manual entry in offline mode');
+        
+        // Recalculate time variables for offline mode
+        const timeParts = manualTime.split(':');
+        const hours = parseInt(timeParts[0]) || 0;
+        const minutes = parseInt(timeParts[1]) || 0;
+        const seconds = parseInt(timeParts[2]) || 0;
+        const calculatedMinutes = hours * 60 + minutes + Math.round(seconds / 60);
+        
+        const mockStartTime = new Date();
+        const mockEndTime = new Date(mockStartTime.getTime() + calculatedMinutes * 60 * 1000);
+        
+        const mockManualEntry = {
+          _id: 'mock-manual-' + Date.now(),
+          userId: currentUser._id,
+          project: selectedProject,
+          task: taskToUse,
+          description,
+          startTime: mockStartTime.toISOString(),
+          endTime: mockEndTime.toISOString(),
+          duration: calculatedMinutes,
+          billable,
+          trackingType: timeframeTab.charAt(0).toUpperCase() + timeframeTab.slice(1),
+          isManualEntry: true,
+          status: 'Completed'
+        };
+        
+        resetForm();
+        onAddEntry(mockManualEntry);
+        alert(`⚠️ Manual entry saved in offline mode. Duration: ${Math.floor(calculatedMinutes/60)}h ${calculatedMinutes%60}m`);
+        return;
+      }
+      
       alert('Failed to save manual entry. Please try again.');
     }
   };

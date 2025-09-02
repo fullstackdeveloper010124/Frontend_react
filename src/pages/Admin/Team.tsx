@@ -971,7 +971,7 @@ const Team = () => {
                   <div>
                     <Label htmlFor="edit-project">Project *</Label>
                     <Select
-                      value={currentMember.project}
+                      value={typeof currentMember.project === 'object' ? currentMember.project._id : currentMember.project}
                       onValueChange={(value) => handleEditChange(value, 'project')}
                     >
                       <SelectTrigger>
