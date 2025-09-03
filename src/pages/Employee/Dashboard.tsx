@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar/EmployeeSidebar';
 import { Header } from '@/components/navbar/EmployeeHeader';
-import { TimeTracker } from '@/components/New folder/TimeTracker';
+import { NewTimeTracker } from '@/components/New folder/NewTimeTracker';
 import { TimeEntries } from '@/components/New folder/TimeEntries';
 import { WeeklySummary } from '@/components/New folder/WeeklySummary';
 import { RecentActivity } from '@/components/New folder/RecentActivity';
 import { UpcomingDeadlines } from '@/components/New folder/UpcomingDeadlines';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { timeEntryAPI, type TimeEntry } from '@/lib/api';
+
+
 
 const Index = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -86,7 +88,7 @@ const Index = () => {
           <main className="p-6 space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
-                <TimeTracker 
+                <NewTimeTracker 
                   onAddEntry={addTimeEntry}
                   activeTimer={activeTimer}
                   setActiveTimer={setActiveTimer}

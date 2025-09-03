@@ -1,5 +1,6 @@
 import React from 'react';
 import AuthTest from '@/components/AuthTest';
+import { LocalTimeTracker } from '@/components/New folder/LocalTimeTracker';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
@@ -13,6 +14,19 @@ const TestPage: React.FC = () => {
             Test your signup and login functionality with the new API integration system
           </p>
         </div>
+
+        {/* LocalTimeTracker Test */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-blue-600">⏱️ Local Time Tracker Test</CardTitle>
+            <CardDescription>
+              Test the LocalTimeTracker component functionality
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LocalTimeTracker />
+          </CardContent>
+        </Card>
 
         <div className="grid md:grid-cols-2 gap-8">
           {/* New API Integration Test */}
