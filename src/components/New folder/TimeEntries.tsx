@@ -14,9 +14,10 @@ interface TimeEntriesProps {
   entries: TimeEntry[];
   onDelete: (id: string) => void;
   onUpdate: (id: string, entry: Partial<TimeEntry>) => void;
+  loading?: boolean;
 }
 
-export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onUpdate }) => {
+export const TimeEntries: React.FC<TimeEntriesProps> = ({ entries, onDelete, onUpdate, loading }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const getStatusColor = (status: string) => {

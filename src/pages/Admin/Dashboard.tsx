@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar/AdminSidebar';
 import { Header } from '@/components/navbar/AdminHeader';
 import { Dashboard } from '@/components/New folder/Dashboard';
-import { TimeTracker } from '@/components/New folder/TimeTracker';
+import { NewTimeTracker } from '@/components/New folder/NewTimeTracker';
 import { TimeEntries } from '@/components/New folder/TimeEntries';
 import { WeeklySummary } from '@/components/New folder/WeeklySummary';
 import { RecentActivity } from '@/components/New folder/RecentActivity';
 import { UpcomingDeadlines } from '@/components/New folder/UpcomingDeadlines';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import { timeEntryAPI, type TimeEntry } from '@/lib/api';
+import { timeEntryAPI, projectAPI, teamAPI, type TimeEntry } from '@/lib/api';
 
 
 const Index = () => {
@@ -102,16 +102,23 @@ const Index = () => {
 
   const addTimeEntry = (entry: TimeEntry) => {
     setTimeEntries(prev => [...prev, entry]);
+    console.log('Added new time entry to admin dashboard:', entry);
   };
 
   const deleteTimeEntry = async (id: string) => {
     try {
+      console.log('Deleting time entry:', id);
       const response = await timeEntryAPI.deleteTimeEntry(id);
       if (response.success) {
         setTimeEntries(prev => prev.filter(entry => entry._id !== id));
+        console.log('Time entry deleted successfully');
+      } else {
+        console.error('Delete failed:', response.error);
+        alert('Failed to delete time entry: ' + (response.error || 'Unknown error'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete time entry:', error);
+      alert('Failed to delete time entry: ' + (error.response?.data?.error || error.message));
       // Fallback for offline mode
       setTimeEntries(prev => prev.filter(entry => entry._id !== id));
     }
@@ -119,19 +126,36 @@ const Index = () => {
 
   const updateTimeEntry = async (id: string, updatedEntry: Partial<TimeEntry>) => {
     try {
+      console.log('Updating time entry:', id, updatedEntry);
       const response = await timeEntryAPI.updateTimeEntry(id, updatedEntry);
       if (response.success && response.data) {
         setTimeEntries(prev => prev.map(entry => 
           entry._id === id ? response.data! : entry
         ));
+        console.log('Time entry updated successfully');
+      } else {
+        console.error('Update failed:', response.error);
+        alert('Failed to update time entry: ' + (response.error || 'Unknown error'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update time entry:', error);
+      alert('Failed to update time entry: ' + (error.response?.data?.error || error.message));
       // Fallback for offline mode
       setTimeEntries(prev => prev.map(entry => 
         entry._id === id ? { ...entry, ...updatedEntry } : entry
       ));
     }
+  };
+
+  // Handle timer state changes
+  const handleTimerStart = (timerData: any) => {
+    setActiveTimer(timerData);
+    console.log('Admin timer started:', timerData);
+  };
+
+  const handleTimerStop = () => {
+    setActiveTimer(null);
+    console.log('Admin timer stopped');
   };
 
   return (
@@ -160,15 +184,19 @@ const Index = () => {
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
-                <TimeTracker 
+                <NewTimeTracker 
                   onAddEntry={addTimeEntry}
                   activeTimer={activeTimer}
                   setActiveTimer={setActiveTimer}
+                  onTimerStart={handleTimerStart}
+                  onTimerStop={handleTimerStop}
+                  currentUser={currentUser}
                 />
                 <TimeEntries 
                   entries={timeEntries}
                   onDelete={deleteTimeEntry}
                   onUpdate={updateTimeEntry}
+                  loading={loading}
                 />
               </div>
               

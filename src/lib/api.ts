@@ -636,6 +636,8 @@ export const timeEntryAPI = {
     task: string;
     description: string;
     trackingType?: string;
+    userType?: string;
+    hourlyRate?: number;
   }): Promise<ApiResponse<TimeEntry>> => {
     try {
       const response = await apiClient.post('/time-entries/start', timerData);
@@ -648,6 +650,46 @@ export const timeEntryAPI = {
   stopTimer: async (timeEntryId: string): Promise<ApiResponse<TimeEntry>> => {
     try {
       const response = await apiClient.put(`/time-entries/stop/${timeEntryId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get active timer by user
+  getActiveByUser: async (userId: string): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.get(`/time-entries/active/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get time entry by ID
+  getTimeEntryById: async (id: string): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.get(`/time-entries/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Create manual time entry
+  createManualEntry: async (data: {
+    userId: string;
+    project: string;
+    task: string;
+    description: string;
+    startTime: string;
+    endTime: string;
+    billable?: boolean;
+    hourlyRate?: number;
+    userType?: string;
+  }): Promise<ApiResponse<TimeEntry>> => {
+    try {
+      const response = await apiClient.post('/time-entries/manual', data);
       return response.data;
     } catch (error) {
       throw error;

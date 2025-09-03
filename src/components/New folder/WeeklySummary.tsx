@@ -7,8 +7,8 @@ interface WeeklySummaryProps {
 
 export const WeeklySummary: React.FC<WeeklySummaryProps> = ({ timeEntries }) => {
   const totalHours = timeEntries.reduce((acc, entry) => {
-    const [hours, minutes] = entry.time.split(':').map(Number);
-    return acc + hours + minutes / 60;
+    // Convert duration from minutes to hours
+    return acc + (entry.duration || 0) / 60;
   }, 0);
 
   const targetHours = 40;

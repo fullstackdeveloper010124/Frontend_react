@@ -5,12 +5,18 @@ interface NewTimeTrackerProps {
   onAddEntry?: (entry: any) => void;
   activeTimer?: any;
   setActiveTimer?: (timer: any) => void;
+  currentUser?: any;
+  onTimerStart?: (timerData: any) => void;
+  onTimerStop?: () => void;
 }
 
 export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
   onAddEntry,
   activeTimer,
-  setActiveTimer
+  setActiveTimer,
+  currentUser: propCurrentUser,
+  onTimerStart,
+  onTimerStop
 }) => {
   const [activeTab, setActiveTab] = useState('Hourly');
   const [isManualEntry, setIsManualEntry] = useState(false);
@@ -250,11 +256,15 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
       try {
         setLoading(true);
         
-        // Get current user
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          setCurrentUser(user);
+        // Get current user (prioritize prop over localStorage)
+        if (propCurrentUser) {
+          setCurrentUser(propCurrentUser);
+        } else {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            setCurrentUser(user);
+          }
         }
         
         // Fetch all projects
