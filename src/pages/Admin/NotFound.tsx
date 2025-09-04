@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sidebar } from "@/components/Sidebar/AdminSidebar"; // Assuming path is correct
-import { Header } from "@/components/navbar/AdminHeader"; // Assuming path is correct
-import API_URLS from '@/lib/api';
+import { Sidebar } from "@/components/Sidebar/AdminSidebar";
+import { Header } from "@/components/navbar/AdminHeader";
+import { ThemeProvider } from '@/components/New folder/ThemeProvider';
+import { InvoiceHeader } from '@/components/New folder/InvoiceHeader';
+import { InvoiceForm } from '@/components/New folder/InvoiceForm';
+import { InvoiceTable } from '@/components/New folder/InvoiceTable';
+import { InvoiceActions } from '@/components/New folder/InvoiceActions';
+import { InvoiceSignature } from '@/components/New folder/InvoiceSignature';
+import { InvoiceTemplates } from '@/components/New folder/InvoiceTemplates';
+import { InvoiceCustomization } from '@/components/New folder/InvoiceCustomization';
 
 // Define the type for a single task item in the invoice table
 interface InvoiceTask {
@@ -16,16 +23,31 @@ const Invoice: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State for sidebar
 
   // State for invoice details
-  const [invoiceNumber] = useState('202506');
+  const [invoiceNumber] = useState(`INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`);
   const [invoiceDate] = useState(new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }));
-  const [consultantName] = useState('Consultant Name / Company');
-  const [companyAddress] = useState('Address line 1, City, Country');
+  const [consultantName] = useState('Your Company Name');
+  const [companyAddress] = useState('123 Business Street, City, State 12345');
+  const [signatureName, setSignatureName] = useState('Authorized Person');
 
   // State for editable content
   const [billTo, setBillTo] = useState('');
   const [bankDetails, setBankDetails] = useState(
-    '<p>Bank Name:</p><p>Full Address of Bank:</p><p>Account Holder:</p><p>Account Holder Address:</p><p>Account No:</p><p>Saving Account</p>'
+    'Bank Name: Your Bank\nAccount Holder: Your Company Name\nAccount Number: 1234567890\nRouting Number: 987654321\nAccount Type: Business Checking'
   );
+
+  // Template and customization state
+  const [selectedTemplate, setSelectedTemplate] = useState('professional');
+  const [showCustomization, setShowCustomization] = useState(false);
+  const [customizationSettings, setCustomizationSettings] = useState({
+    primaryColor: '#3B82F6',
+    accentColor: '#8B5CF6',
+    fontFamily: 'Inter, sans-serif',
+    fontSize: 'medium',
+    logoUrl: '',
+    headerStyle: 'modern',
+    borderStyle: 'rounded',
+    spacing: 'normal'
+  });
 
   // State for tasks table
   const [tasks, setTasks] = useState<InvoiceTask[]>(() => [
@@ -85,258 +107,148 @@ const Invoice: React.FC = () => {
 
   // Remove a row from the tasks table
   const removeRow = (id: string) => {
-    setTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+    if (tasks.length > 1) {
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== id));
+    }
   };
 
-  // Handle contenteditable div changes
-  const handleContentEditableChange = (setter: React.Dispatch<React.SetStateAction<string>>) =>
-    (e: React.FormEvent<HTMLDivElement>) => {
-      setter(e.currentTarget.innerHTML);
-    };
+  // Invoice action handlers
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleSave = () => {
+    // Save invoice logic here
+    console.log('Saving invoice...', { tasks, billTo, bankDetails });
+    alert('Invoice saved successfully!');
+  };
+
+  const handlePreview = () => {
+    // Preview logic here
+    console.log('Previewing invoice...');
+  };
+
+  const handleExportPDF = () => {
+    // PDF export logic here
+    console.log('Exporting PDF...');
+    alert('PDF export feature coming soon!');
+  };
+
+  const handleSendEmail = () => {
+    // Email sending logic here
+    console.log('Sending email...');
+    alert('Email feature coming soon!');
+  };
+
+  const handleDuplicate = () => {
+    // Duplicate invoice logic here
+    console.log('Duplicating invoice...');
+    alert('Invoice duplicated!');
+  };
+
+  // Template and customization handlers
+  const handleTemplateChange = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    console.log('Template changed to:', templateId);
+  };
+
+  const handleCustomize = () => {
+    setShowCustomization(true);
+  };
+
+  const handleCustomizationClose = () => {
+    setShowCustomization(false);
+  };
+
+  const handleCustomizationSave = (settings: any) => {
+    setCustomizationSettings(settings);
+    console.log('Customization settings saved:', settings);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
-      {/* Sidebar Component */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+    <ThemeProvider>
+      <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        
+        <div className="flex-1 overflow-auto">
+          <Header onMenuClick={() => setIsSidebarOpen(true)} />
+          
+          <main className="p-6 space-y-6">
+            {/* Modern Invoice Header */}
+            <InvoiceHeader
+              invoiceNumber={invoiceNumber}
+              invoiceDate={invoiceDate}
+              consultantName={consultantName}
+              companyAddress={companyAddress}
+            />
 
-      <div className="w-full">
-        {/* Header Component */}
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
+            {/* Invoice Actions Panel */}
+            <InvoiceActions
+              onPrint={handlePrint}
+              onSave={handleSave}
+              onPreview={handlePreview}
+              onExportPDF={handleExportPDF}
+              onSendEmail={handleSendEmail}
+              onDuplicate={handleDuplicate}
+            />
 
-        <main className="p-6">
-          {/* Inline styles for the invoice component are placed here */}
-          <style>{`
-            :root {
-              --border: 1px solid #000;
-              --accent: #ffcc00;
-              --light-bg: #fff9e6;
-            }
-            * {
-              box-sizing: border-box;
-              font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            }
-            /* Note: body styles are overridden by the main app layout's flex container */
-            .invoice {
-              width: 850px;
-              margin: 20px auto; /* Added vertical margin for spacing */
-              background: #fff;
-              padding: 40px 50px;
-              border: var(--border);
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Added a subtle shadow */
-            }
-            .invoice header {
-              text-align: center;
-              margin-bottom: 30px;
-            }
-            .invoice header h1 {
-              margin: 0 0 10px;
-              text-decoration: underline;
-            }
-            .company-info,
-            .client-info,
-            .bank-details {
-              border: var(--border);
-              padding: 10px;
-              background: var(--light-bg);
-            }
-            .company-info {
-              width: 60%;
-              margin: 0 auto 20px;
-            }
-            .meta {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 20px;
-              font-size: 0.95rem;
-            }
-            .meta div {
-              width: 48%;
-            }
-            .section-title {
-              font-weight: 600;
-              margin-bottom: 6px;
-              text-decoration: underline;
-            }
-            .tasks-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 15px;
-            }
-            .tasks-table th,
-            .tasks-table td {
-              border: var(--border);
-              padding: 8px 6px;
-              text-align: left;
-            }
-            .tasks-table th {
-              background: var(--light-bg);
-              text-align: center;
-            }
-            .tasks-table td.unit,
-            .tasks-table td.total,
-            .tasks-table th.unit,
-            .tasks-table th.total {
-              text-align: center;
-              width: 90px;
-            }
-            #gross-total {
-              text-align: right;
-              font-weight: 600;
-              margin-bottom: 30px;
-            }
-            .bank-details p {
-              margin: 4px 0;
-              font-size: 0.95rem;
-            }
-            .signature {
-              display: flex;
-              justify-content: flex-start;
-              margin-top: 40px;
-            }
-            .signature-box {
-              border: var(--border);
-              width: 220px;
-              height: 60px;
-              background: var(--accent);
-            }
-            .signature-label {
-              margin-top: 6px;
-              font-weight: 600;
-            }
-            .print-button-container { /* New container for centering the print button */
-                text-align: center;
-                width: 850px;
-                margin: 20px auto;
-            }
-            .print-btn {
-              display: inline-block; /* Changed to inline-block for centering with text-align */
-              padding: 10px 20px;
-              border: none;
-              background: #000;
-              color: #fff;
-              cursor: pointer;
-            }
-            @media print {
-              .print-btn, .print-button-container, .sidebar, .header { /* Hide sidebar and header on print */
-                display: none !important; /* Use !important to override potential component styles */
+            {/* Invoice Templates */}
+            <InvoiceTemplates
+              selectedTemplate={selectedTemplate}
+              onTemplateChange={handleTemplateChange}
+              onCustomize={handleCustomize}
+            />
+
+            {/* Invoice Form Fields */}
+            <InvoiceForm
+              billTo={billTo}
+              onBillToChange={setBillTo}
+              bankDetails={bankDetails}
+              onBankDetailsChange={setBankDetails}
+            />
+
+            {/* Enhanced Invoice Table */}
+            <InvoiceTable
+              tasks={tasks}
+              onTaskChange={handleTaskChange}
+              onAddRow={addRow}
+              onRemoveRow={removeRow}
+              formatNumber={fmt}
+            />
+
+            {/* Signature Section */}
+            <InvoiceSignature
+              signatureName={signatureName}
+              onSignatureNameChange={setSignatureName}
+            />
+
+            {/* Customization Modal */}
+            <InvoiceCustomization
+              isOpen={showCustomization}
+              onClose={handleCustomizationClose}
+              settings={customizationSettings}
+              onSettingsChange={handleCustomizationSave}
+            />
+
+            {/* Print Styles */}
+            <style>{`
+              @media print {
+                .sidebar, .header, button { 
+                  display: none !important;
+                }
+                body {
+                  background: #fff;
+                }
+                main {
+                  padding: 0 !important;
+                  margin: 0 !important;
+                }
               }
-              body {
-                background: #fff;
-              }
-              .invoice {
-                border: none;
-                width: 100%;
-                padding: 0;
-                margin: 0; /* Remove margin for print */
-                box-shadow: none; /* Remove shadow for print */
-              }
-            }
-          `}</style>
-
-          <section className="invoice" id="invoice">
-            <header>
-              <h1>INVOICE</h1>
-              <div className="company-info">
-                <strong id="consultant-name">{consultantName}</strong><br />
-                <span id="company-address">{companyAddress}</span>
-              </div>
-            </header>
-
-            <div className="meta">
-              <div>
-                <span className="section-title">Invoice Number:</span>
-                <span id="invoice-number">{invoiceNumber}</span>
-              </div>
-              <div>
-                <span className="section-title">Date:</span>
-                <span id="invoice-date">{invoiceDate}</span>
-              </div>
-            </div>
-
-            <div className="section-title">To:</div>
-            <div
-              className="client-info"
-              contentEditable="true"
-              id="bill-to"
-              style={{ height: '80px' }}
-              onInput={handleContentEditableChange(setBillTo)}
-              dangerouslySetInnerHTML={{ __html: billTo }}
-            ></div>
-
-            <table className="tasks-table" id="tasks-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '70px' }}>Days / Hrs</th>
-                  <th>Description (Project Name / Task Summary)</th>
-                  <th className="unit">Unit</th>
-                  <th className="total">Total</th>
-                  <th style={{ width: '40px' }}>
-                    <button title="Add Row" onClick={addRow}>+</button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tasks.map((task) => (
-                  <tr key={task.id}>
-                    <td
-                      contentEditable="true"
-                      className="qty"
-                      onInput={(e) => handleTaskChange(task.id, 'qty', e.currentTarget.innerText)}
-                      suppressContentEditableWarning={true}
-                    >
-                      {task.qty}
-                    </td>
-                    <td
-                      contentEditable="true"
-                      className="desc"
-                      onInput={(e) => handleTaskChange(task.id, 'desc', e.currentTarget.innerText)}
-                      suppressContentEditableWarning={true}
-                    >
-                      {task.desc}
-                    </td>
-                    <td
-                      contentEditable="true"
-                      className="unit"
-                      onInput={(e) => handleTaskChange(task.id, 'unit', e.currentTarget.innerText)}
-                      suppressContentEditableWarning={true}
-                    >
-                      {task.unit}
-                    </td>
-                    <td className="total">{fmt(task.total)}</td>
-                    <td>
-                      <button onClick={() => removeRow(task.id)}>x</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div id="gross-total">Gross Total &gt;&gt;&gt; <span id="gross-value" ref={grossValueRef}>0.00</span></div>
-
-            <div className="section-title">Bank Details:</div>
-            <div
-              className="bank-details"
-              contentEditable="true"
-              id="bank-details"
-              onInput={handleContentEditableChange(setBankDetails)}
-              dangerouslySetInnerHTML={{ __html: bankDetails }}
-            ></div>
-
-            <div className="signature">
-              <div>
-                <div className="signature-box"></div>
-                <div className="signature-label" contentEditable="true">Person Name</div>
-              </div>
-            </div>
-          </section>
-
-          {/* Container for centering the print button */}
-          <div className="print-button-container">
-            <button className="print-btn" onClick={() => window.print()}>Print Invoice</button>
-          </div>
-        </main>
+            `}</style>
+          </main>
+        </div>
       </div>
-    </div>
+    </ThemeProvider>
   );
 };
 

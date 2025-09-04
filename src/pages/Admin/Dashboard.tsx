@@ -7,6 +7,9 @@ import { TimeEntries } from '@/components/New folder/TimeEntries';
 import { WeeklySummary } from '@/components/New folder/WeeklySummary';
 import { RecentActivity } from '@/components/New folder/RecentActivity';
 import { UpcomingDeadlines } from '@/components/New folder/UpcomingDeadlines';
+import { TeamOverview } from '@/components/New folder/TeamOverview';
+import { QuickActions } from '@/components/New folder/QuickActions';
+import { SystemHealth } from '@/components/New folder/SystemHealth';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
 import { timeEntryAPI, projectAPI, teamAPI, type TimeEntry } from '@/lib/api';
 
@@ -158,6 +161,34 @@ const Index = () => {
     console.log('Admin timer stopped');
   };
 
+  // Handle quick actions
+  const handleQuickAction = (action: string) => {
+    console.log('Quick action triggered:', action);
+    // Add routing or modal logic here based on action
+    switch (action) {
+      case 'add-project':
+        // Navigate to project creation or open modal
+        break;
+      case 'manage-team':
+        // Navigate to team management
+        break;
+      case 'generate-report':
+        // Open report generation modal
+        break;
+      case 'schedule-meeting':
+        // Open calendar or meeting scheduler
+        break;
+      case 'system-settings':
+        // Navigate to settings
+        break;
+      case 'notifications':
+        // Open notifications panel
+        break;
+      default:
+        console.log('Unknown action:', action);
+    }
+  };
+
   return (
     <ThemeProvider>
       <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
@@ -169,21 +200,41 @@ const Index = () => {
         <div className="flex-1 overflow-auto">
           <Header onMenuClick={() => setSidebarOpen(true)} />
           
-          <main className="p-6 space-y-6">
+          <main className="p-6 space-y-8">
+            {/* Main Dashboard Overview */}
             <Dashboard timeEntries={timeEntries} />
+            
+            {/* Team Overview and Quick Actions Row */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2">
+                <TeamOverview timeEntries={timeEntries} />
+              </div>
+              <div>
+                <QuickActions onAction={handleQuickAction} />
+              </div>
+            </div>
             
             {/* Admin Time Tracking Section */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Admin Time Tracking
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Track your administrative tasks and manage team time entries
-              </p>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    Admin Time Tracking
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Track your administrative tasks and manage team time entries
+                  </p>
+                </div>
+                <div className="hidden md:flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span>Live tracking active</span>
+                </div>
+              </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-6">
+            {/* Time Tracking and Analytics */}
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+              <div className="xl:col-span-3 space-y-6">
                 <NewTimeTracker 
                   onAddEntry={addTimeEntry}
                   activeTimer={activeTimer}
@@ -206,6 +257,9 @@ const Index = () => {
                 <UpcomingDeadlines />
               </div>
             </div>
+
+            {/* System Health and Monitoring */}
+            <SystemHealth />
           </main>
         </div>
       </div>

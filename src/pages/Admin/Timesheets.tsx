@@ -1,26 +1,53 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from '@/components/Sidebar/AdminSidebar';
 import { Header } from '@/components/navbar/AdminHeader';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import { Calendar, Clock, Filter, Download, Loader2 } from 'lucide-react';
-import { timeEntryAPI, type TimeEntry } from '@/lib/api';
+import { TimesheetFilters } from '@/components/New folder/TimesheetFilters';
+import { TimesheetAnalytics } from '@/components/New folder/TimesheetAnalytics';
+import { TimesheetTable } from '@/components/New folder/TimesheetTable';
+import { Calendar, Clock, Filter, Download, Loader2, BarChart3, FileText, TrendingUp } from 'lucide-react';
+import { timeEntryAPI, teamAPI, userAPI, type TimeEntry } from '@/lib/api';
 
 const Timesheets = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [userCache, setUserCache] = useState<Map<string, string>>(new Map());
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
     project: '',
-    status: ''
+    status: '',
+    user: '',
+    billable: '',
+    searchTerm: ''
   });
+  const [showAnalytics, setShowAnalytics] = useState(true);
+  const [projects, setProjects] = useState<string[]>([]);
+  const [users, setUsers] = useState<string[]>([]);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch time entries on component mount
   useEffect(() => {
     fetchTimeEntries();
+    
+    // Set up real-time clock for active timers
+    intervalRef.current = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    // Auto-refresh time entries every 30 seconds
+    const refreshInterval = setInterval(() => {
+      fetchTimeEntries();
+    }, 30000);
+    
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      clearInterval(refreshInterval);
+    };
   }, []);
 
   const fetchTimeEntries = async () => {
@@ -32,6 +59,8 @@ const Timesheets = () => {
       
       if (response.success && response.data) {
         setTimeEntries(response.data);
+        // Cache user names for better performance
+        await cacheUserNames(response.data);
       } else {
         setError('Failed to fetch time entries');
       }
@@ -43,10 +72,74 @@ const Timesheets = () => {
     }
   };
 
+  const cacheUserNames = async (entries: TimeEntry[]) => {
+    const newCache = new Map(userCache);
+    const uncachedUserIds = new Set<string>();
+    
+    // Collect all unique user IDs that aren't cached
+    entries.forEach(entry => {
+      const userId = typeof entry.userId === 'string' ? entry.userId : entry.userId?._id;
+      if (userId && !newCache.has(userId)) {
+        uncachedUserIds.add(userId);
+      }
+    });
+
+    // Fetch user names from both Team and User tables
+    if (uncachedUserIds.size > 0) {
+      try {
+        // Fetch from Team table
+        const teamResponse = await teamAPI.getAllTeam();
+        if (teamResponse.success && teamResponse.data) {
+          teamResponse.data.forEach(member => {
+            if (uncachedUserIds.has(member._id)) {
+              newCache.set(member._id, member.name);
+              uncachedUserIds.delete(member._id);
+            }
+          });
+        }
+
+        // Fetch remaining from User table
+        if (uncachedUserIds.size > 0) {
+          // Note: userAPI.getAllUsers might not exist, so we'll handle this gracefully
+          try {
+            const userResponse = await userAPI.getAllUsers();
+            if (userResponse.success && userResponse.data) {
+              userResponse.data.forEach(user => {
+                if (uncachedUserIds.has(user._id)) {
+                  newCache.set(user._id, user.name);
+                }
+              });
+            }
+          } catch (userErr) {
+            console.log('User API not available, using team data only');
+          }
+        }
+
+        setUserCache(newCache);
+      } catch (err) {
+        console.error('Error caching user names:', err);
+      }
+    }
+  };
+
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours}.${mins.toString().padStart(2, '0')}`;
+    const secs = 0; // For completed entries, we don't have seconds precision
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatRealTimeTimer = (startTime: string) => {
+    const start = new Date(startTime);
+    const now = currentTime;
+    const diffMs = now.getTime() - start.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const formatDate = (dateString: string) => {
@@ -62,7 +155,21 @@ const Timesheets = () => {
   };
 
   const getUserName = (user: any) => {
-    return typeof user === 'string' ? user : user?.name || 'Unknown User';
+    // Get user ID from the user object
+    const userId = typeof user === 'string' ? user : user?._id;
+    
+    // Check cache first
+    if (userId && userCache.has(userId)) {
+      return userCache.get(userId)!;
+    }
+    
+    // If user object has name directly
+    if (typeof user === 'object' && user?.name) {
+      return user.name;
+    }
+    
+    // Fallback for unknown users
+    return 'Unknown User';
   };
 
   return (
@@ -76,206 +183,84 @@ const Timesheets = () => {
         <div className="flex-1 overflow-auto">
           <Header onMenuClick={() => setSidebarOpen(true)} />
           
-          <main className="p-6">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Timesheets</h1>
-              <p className="text-gray-600 dark:text-gray-400">Manage and review your time entries</p>
-            </div>
-
-            {/* Filters and Actions */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="w-5 h-5 text-gray-400" />
-                    <select className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                      <option>This Week</option>
-                      <option>Last Week</option>
-                      <option>This Month</option>
-                      <option>Custom Range</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Filter className="w-5 h-5 text-gray-400" />
-                    <select className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                      <option>All Projects</option>
-                      <option>Website Redesign</option>
-                      <option>Mobile App</option>
-                      <option>Marketing Campaign</option>
-                    </select>
-                  </div>
+          <main className="p-6 space-y-6">
+            {/* Header Section */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold mb-2">Team Timesheets</h1>
+                  <p className="text-indigo-100 text-lg">Monitor and analyze your team's time tracking data</p>
                 </div>
-                <button className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
-                  <Download className="w-4 h-4" />
-                  <span>Export</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg">
-                    <Clock className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                <div className="hidden md:flex items-center space-x-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">
+                      {timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0) > 0 
+                        ? Math.round(timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0) / 60)
+                        : 0}h
+                    </div>
+                    <div className="text-indigo-200 text-sm">Total Hours</div>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Hours</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatDuration(timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0))}
-                    </p>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold">{timeEntries.length}</div>
+                    <div className="text-indigo-200 text-sm">Entries</div>
                   </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 dark:bg-green-500/20 rounded-lg">
-                    <Calendar className="w-6 h-6 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Entries</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{timeEntries.length}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-yellow-100 dark:bg-yellow-500/20 rounded-lg">
-                    <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Billable Hours</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatDuration(timeEntries.filter(e => e.billable).reduce((sum, entry) => sum + (entry.duration || 0), 0))}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-lg">
-                    <Download className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Timers</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {timeEntries.filter(e => e.status === 'In Progress').length}
-                    </p>
-                  </div>
+                  <FileText className="w-16 h-16 text-indigo-200" />
                 </div>
               </div>
             </div>
 
-            {/* Timesheet Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Time Entries ({timeEntries.length})</h3>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Project</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Task</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Description</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Hours</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Billable</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {loading ? (
-                      <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center">
-                          <div className="flex items-center justify-center">
-                            <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                            <span className="text-gray-500 dark:text-gray-400">Loading time entries...</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : error ? (
-                      <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center">
-                          <div className="text-red-600 dark:text-red-400">{error}</div>
-                          <button 
-                            onClick={fetchTimeEntries}
-                            className="mt-2 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-                          >
-                            Try again
-                          </button>
-                        </td>
-                      </tr>
-                    ) : timeEntries.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                          No time entries found
-                        </td>
-                      </tr>
-                    ) : (
-                      timeEntries.map((entry) => (
-                        <tr key={entry._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            <div className="flex items-center">
-                              <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center">
-                                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                                  {getUserName(entry.userId).charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                              <div className="ml-3">
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {getUserName(entry.userId)}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            {formatDate(entry.createdAt || '')}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            {getProjectName(entry.project)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-                            {getTaskName(entry.task)}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 max-w-xs truncate">
-                            {entry.description || 'No description'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                            <div className="flex items-center">
-                              <Clock className="w-4 h-4 mr-1 text-gray-400" />
-                              {formatDuration(entry.duration || 0)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              entry.status === 'Completed' ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 
-                              entry.status === 'In Progress' ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' :
-                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-                            }`}>
-                              {entry.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              entry.billable ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' : 
-                              'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
-                            }`}>
-                              {entry.billable ? 'Billable' : 'Non-billable'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+            {/* Action Bar */}
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+              <button
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                  showAnalytics 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>{showAnalytics ? 'Hide' : 'Show'} Analytics</span>
+              </button>
             </div>
+
+            {/* Advanced Filters */}
+            <TimesheetFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              onClearFilters={() => setFilters({
+                startDate: '',
+                endDate: '',
+                project: '',
+                status: '',
+                user: '',
+                billable: '',
+                searchTerm: ''
+              })}
+              projects={projects}
+              users={users}
+            />
+
+            {/* Analytics Section */}
+            {showAnalytics && (
+              <TimesheetAnalytics timeEntries={timeEntries} />
+            )}
+
+            {/* Enhanced Timesheet Table */}
+            <TimesheetTable
+              timeEntries={timeEntries}
+              loading={loading}
+              error={error}
+              onRetry={fetchTimeEntries}
+              getUserName={getUserName}
+              formatDuration={formatDuration}
+              formatRealTimeTimer={formatRealTimeTimer}
+              formatDate={formatDate}
+              getProjectName={getProjectName}
+              getTaskName={getTaskName}
+              currentTime={currentTime}
+            />
+
           </main>
         </div>
       </div>

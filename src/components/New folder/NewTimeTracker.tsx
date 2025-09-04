@@ -62,6 +62,7 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
         name: newTaskName.trim(),
         description: `Task created from time tracker`,
         project: selectedProject,
+        assignedModel: 'TeamMember', // Required field for backend
         priority: 'medium' as const,
         status: 'todo' as const,
         estimatedHours: 0,
@@ -70,6 +71,7 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
         isActive: true
       };
 
+      console.log('Creating task with data:', taskData);
       const response = await taskAPI.createTask(taskData);
       if (response.success && response.data) {
         // Add the new task to the tasks list
@@ -79,10 +81,21 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
         // Reset the input
         setNewTaskName('');
         setShowTaskInput(false);
+        console.log('Task created successfully:', response.data);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create task:', error);
-      alert('Failed to create task. Please try again.');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      let errorMessage = 'Failed to create task. Please try again.';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      alert(errorMessage);
     } finally {
       setCreatingTask(false);
     }
@@ -134,14 +147,21 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
           };
           
           console.log('=== TIMER START DEBUG ===');
-          console.log('Starting timer with data:', timerData);
-          console.log('User ID:', currentUser._id);
-          console.log('User Type:', currentUser.userType);
-          console.log('Current User Object:', currentUser);
-          console.log('Project ID:', selectedProject);
-          console.log('Task ID:', taskId);
-          console.log('Description:', description || 'Time tracking');
-          console.log('API URL being called:', 'POST /time-entries/start');
+          console.log('🚀 Starting timer with employee details:');
+          console.log('Timer Data:', timerData);
+          console.log('📋 Employee Details:');
+          console.log('  - User ID:', currentUser._id);
+          console.log('  - Name:', currentUser.name);
+          console.log('  - Email:', currentUser.email);
+          console.log('  - User Type:', currentUser.userType);
+          console.log('  - Role:', currentUser.role);
+          console.log('📊 Project & Task Details:');
+          console.log('  - Project ID:', selectedProject);
+          console.log('  - Task ID:', taskId);
+          console.log('  - Description:', description || 'Time tracking');
+          console.log('  - Tracking Type:', activeTab);
+          console.log('🌐 API Call:', 'POST /time-entries/start');
+          console.log('📦 Complete User Object:', currentUser);
           
           const response = await timeEntryAPI.startTimer(timerData);
           if (response.success && response.data) {
@@ -259,11 +279,24 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
         // Get current user (prioritize prop over localStorage)
         if (propCurrentUser) {
           setCurrentUser(propCurrentUser);
+          console.log('Using prop current user:', propCurrentUser);
         } else {
           const userStr = localStorage.getItem('user');
           if (userStr) {
             const user = JSON.parse(userStr);
             setCurrentUser(user);
+            console.log('Using localStorage user:', user);
+          } else {
+            // Fallback: Create a temporary user for testing
+            const tempUser = {
+              _id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId
+              name: 'Test Employee',
+              email: 'test@example.com',
+              userType: 'TeamMember',
+              role: 'employee'
+            };
+            setCurrentUser(tempUser);
+            console.log('Using temporary user for testing:', tempUser);
           }
         }
         

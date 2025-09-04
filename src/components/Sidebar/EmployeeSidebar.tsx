@@ -2,6 +2,7 @@ import React from 'react';
 import { Clock, BarChart3, Calendar, Users, FileText, Settings, X, Plus, ClipboardList } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -10,6 +11,16 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
+  const { user } = useAuth();
+  
+  // Helper function to generate initials from name
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 2);
+  };
   
   const menuItems = [
     { icon: BarChart3, label: 'Dashboard', href: '/employee/dashboard' },
@@ -53,11 +64,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           {/* User Profile */}
           <div className="flex items-center mb-6">
             <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center mr-3">
-              <span className="text-lg font-semibold">JD</span>
+              <span className="text-lg font-semibold">
+                {user?.name ? getInitials(user.name) : 'U'}
+              </span>
             </div>
             <div>
-              <p className="font-medium">John Doe</p>
-              <p className="text-xs text-indigo-300">Admin</p>
+              <p className="font-medium">{user?.name || 'Employee'}</p>
+              <p className="text-xs text-indigo-300">{user?.role || 'Employee'}</p>
             </div>
           </div>
           
