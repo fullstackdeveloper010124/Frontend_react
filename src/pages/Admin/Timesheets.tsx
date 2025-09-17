@@ -7,7 +7,7 @@ import { TimesheetFilters } from '@/components/New folder/TimesheetFilters';
 import { TimesheetAnalytics } from '@/components/New folder/TimesheetAnalytics';
 import { TimesheetTable } from '@/components/New folder/TimesheetTable';
 import { Calendar, Clock, Filter, Download, Loader2, BarChart3, FileText, TrendingUp } from 'lucide-react';
-import { timeEntryAPI, teamAPI, userAPI, type TimeEntry } from '@/lib/api';
+import { timeEntryAPI, teamAPI, userAPI, type TimeEntry, type TeamMember } from '@/lib/api';
 
 const Timesheets = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,16 +23,22 @@ const Timesheets = () => {
     status: '',
     user: '',
     billable: '',
-    searchTerm: ''
+    searchTerm: '',
+    teamMember: '',
+    shiftType: ''
   });
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [projects, setProjects] = useState<string[]>([]);
   const [users, setUsers] = useState<string[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [selectedTeamMember, setSelectedTeamMember] = useState<TeamMember | null>(null);
+  const [filteredTimeEntries, setFilteredTimeEntries] = useState<TimeEntry[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch time entries on component mount
+  // Fetch time entries and team members on component mount
   useEffect(() => {
     fetchTimeEntries();
+    fetchTeamMembers();
     
     // Set up real-time clock for active timers
     intervalRef.current = setInterval(() => {
@@ -50,12 +56,26 @@ const Timesheets = () => {
     };
   }, []);
 
+  // Filter time entries when filters change
+  useEffect(() => {
+    applyFilters();
+  }, [timeEntries, filters, selectedTeamMember]);
+
   const fetchTimeEntries = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await timeEntryAPI.getAllTimeEntries(filters);
+      // Create filter object without teamMember and shiftType for API call
+      const apiFilters = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        project: filters.project,
+        status: filters.status,
+        userId: filters.user
+      };
+      
+      const response = await timeEntryAPI.getAllTimeEntries(apiFilters);
       
       if (response.success && response.data) {
         setTimeEntries(response.data);
@@ -69,6 +89,61 @@ const Timesheets = () => {
       setError('Failed to fetch time entries');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    try {
+      const response = await teamAPI.getAllTeam();
+      if (response.success && response.data) {
+        setTeamMembers(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching team members:', err);
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...timeEntries];
+
+    // Apply shift-based filtering
+    if (filters.teamMember && selectedTeamMember) {
+      // Filter by selected team member's ID
+      filtered = filtered.filter(entry => {
+        const userId = typeof entry.userId === 'string' ? entry.userId : entry.userId?._id;
+        return userId === filters.teamMember;
+      });
+
+      // Filter by shift type in trackingType
+      if (filters.shiftType) {
+        const shiftType = filters.shiftType.charAt(0).toUpperCase() + filters.shiftType.slice(1).toLowerCase();
+        filtered = filtered.filter(entry => entry.trackingType === shiftType);
+      }
+    }
+
+    // Apply search term filtering
+    if (filters.searchTerm) {
+      const searchLower = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(entry => 
+        entry.description?.toLowerCase().includes(searchLower) ||
+        getProjectName(entry.project).toLowerCase().includes(searchLower) ||
+        getTaskName(entry.task).toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply billable filtering
+    if (filters.billable) {
+      const isBillable = filters.billable === 'true';
+      filtered = filtered.filter(entry => entry.billable === isBillable);
+    }
+
+    setFilteredTimeEntries(filtered);
+  };
+
+  const handleTeamMemberSelect = (member: TeamMember | null) => {
+    setSelectedTeamMember(member);
+    if (member) {
+      console.log(`Selected team member: ${member.name} with ${member.shift} shift`);
     }
   };
 
@@ -228,27 +303,59 @@ const Timesheets = () => {
             <TimesheetFilters
               filters={filters}
               onFiltersChange={setFilters}
-              onClearFilters={() => setFilters({
-                startDate: '',
-                endDate: '',
-                project: '',
-                status: '',
-                user: '',
-                billable: '',
-                searchTerm: ''
-              })}
+              onClearFilters={() => {
+                setFilters({
+                  startDate: '',
+                  endDate: '',
+                  project: '',
+                  status: '',
+                  user: '',
+                  billable: '',
+                  searchTerm: '',
+                  teamMember: '',
+                  shiftType: ''
+                });
+                setSelectedTeamMember(null);
+              }}
               projects={projects}
               users={users}
+              teamMembers={teamMembers}
+              onTeamMemberSelect={handleTeamMemberSelect}
             />
+
+            {/* Shift Information Display */}
+            {selectedTeamMember && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                      Viewing {selectedTeamMember.shift} Shift Data
+                    </h3>
+                    <p className="text-blue-700 dark:text-blue-300 mt-1">
+                      Employee: {selectedTeamMember.name} ({selectedTeamMember.employeeId})
+                    </p>
+                    <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                      Showing time entries with {selectedTeamMember.shift.toLowerCase()} tracking type only
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                      {filteredTimeEntries.length}
+                    </div>
+                    <div className="text-blue-700 dark:text-blue-300 text-sm">Entries Found</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Analytics Section */}
             {showAnalytics && (
-              <TimesheetAnalytics timeEntries={timeEntries} />
+              <TimesheetAnalytics timeEntries={filteredTimeEntries.length > 0 ? filteredTimeEntries : timeEntries} />
             )}
 
             {/* Enhanced Timesheet Table */}
             <TimesheetTable
-              timeEntries={timeEntries}
+              timeEntries={filteredTimeEntries.length > 0 || filters.teamMember ? filteredTimeEntries : timeEntries}
               loading={loading}
               error={error}
               onRetry={fetchTimeEntries}

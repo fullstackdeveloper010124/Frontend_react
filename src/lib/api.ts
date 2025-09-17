@@ -42,6 +42,15 @@ export const API_URLS = {
   tasks: `${API_BASE_URL}/tasks`,
   tasksByProject: (projectId: string) => `${API_BASE_URL}/tasks/project/${projectId}`,
   tasksByUser: (userId: string) => `${API_BASE_URL}/tasks/user/${userId}`,
+  
+  // Shifts
+  shifts: `${API_BASE_URL}/shifts`,
+  shiftsAll: `${API_BASE_URL}/shifts/all`,
+  shiftsByEmployee: (employeeId: string) => `${API_BASE_URL}/shifts/employee/${employeeId}`,
+  shiftsAssign: `${API_BASE_URL}/shifts/assign`,
+  shiftUpdate: (shiftId: string) => `${API_BASE_URL}/shifts/${shiftId}`,
+  shiftDelete: (shiftId: string) => `${API_BASE_URL}/shifts/${shiftId}`,
+  shiftHistory: (employeeId: string) => `${API_BASE_URL}/shifts/history/${employeeId}`,
 };
 
 // Create axios instance with default config
@@ -55,12 +64,19 @@ const apiClient: AxiosInstance = axios.create({
 
 
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and user role
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    // Add user role for permission checks
+    if (user.role) {
+      config.headers['user-role'] = user.role;
     }
     
     // Debug: Log the request
@@ -176,6 +192,7 @@ export interface LeaveApplication {
 
 // TeamMember interface
 export interface TeamMember {
+  isUser: any;
   _id: string;
   employeeId: string;
   name: string;
@@ -199,6 +216,7 @@ export interface TeamMember {
 // Time Entry types
 export interface TimeEntry {
   _id: string;
+  id?: string; // Optional id property for backend compatibility
   userId: string | User;
   project: string | Project;
   task: string | Task;
@@ -230,6 +248,27 @@ export interface Task {
   dueDate?: string;
   tags: string[];
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Shift types
+export interface Shift {
+  _id: string;
+  employeeId: string | TeamMember;
+  shiftType: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+  startTime: string;
+  endTime: string;
+  workingDays: string[];
+  isActive: boolean;
+  assignedBy: string | User;
+  assignedDate: string;
+  description?: string;
+  hoursPerDay: number;
+  daysPerWeek: number;
+  weeksPerMonth: number;
+  monthlyHours: number;
+  isDefault?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -640,9 +679,37 @@ export const timeEntryAPI = {
     hourlyRate?: number;
   }): Promise<ApiResponse<TimeEntry>> => {
     try {
+      console.log('🔄 API: Starting timer with data:', timerData);
       const response = await apiClient.post('/time-entries/start', timerData);
+      console.log('🔄 API: Raw response:', response);
+      console.log('🔄 API: Response status:', response.status);
+      console.log('🔄 API: Response data:', response.data);
+      
+      // Handle different response formats from backend
+      if (response.status === 200 || response.status === 201) {
+        // If response.data is already in the correct format
+        if (response.data && typeof response.data === 'object') {
+          // Check if it's already wrapped in ApiResponse format
+          if (response.data.success !== undefined) {
+            return response.data;
+          }
+          // If it's direct data, wrap it
+          else if (response.data._id || response.data.id) {
+            return { success: true, data: response.data };
+          }
+          // If it has nested data
+          else if (response.data.data) {
+            return { success: true, data: response.data.data };
+          }
+        }
+      }
+      
+      // Fallback: return the response as-is
       return response.data;
     } catch (error) {
+      console.error('🔄 API: Timer start error:', error);
+      console.error('🔄 API: Error response:', error.response?.data);
+      console.error('🔄 API: Error status:', error.response?.status);
       throw error;
     }
   },
@@ -808,6 +875,75 @@ export const taskAPI = {
   getTaskById: async (id: string): Promise<ApiResponse<Task>> => {
     try {
       const response = await apiClient.get(`/tasks/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+};
+
+// Shift API functions
+export const shiftAPI = {
+  getEmployeeShift: async (employeeId: string): Promise<ApiResponse<Shift>> => {
+    try {
+      const response = await apiClient.get(`/shifts/employee/${employeeId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getAllShifts: async (): Promise<ApiResponse<Shift[]>> => {
+    try {
+      const response = await apiClient.get('/shifts/all');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  assignShift: async (shiftData: {
+    employeeId: string;
+    shiftType: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+    startTime?: string;
+    endTime?: string;
+    workingDays?: string[];
+    description?: string;
+    hoursPerDay?: number;
+    daysPerWeek?: number;
+    weeksPerMonth?: number;
+    monthlyHours?: number;
+    assignedBy: string;
+  }): Promise<ApiResponse<Shift>> => {
+    try {
+      const response = await apiClient.post('/shifts/assign', shiftData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  updateShift: async (shiftId: string, shiftData: Partial<Shift>): Promise<ApiResponse<Shift>> => {
+    try {
+      const response = await apiClient.put(`/shifts/${shiftId}`, shiftData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  deleteShift: async (shiftId: string): Promise<ApiResponse> => {
+    try {
+      const response = await apiClient.delete(`/shifts/${shiftId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getShiftHistory: async (employeeId: string): Promise<ApiResponse<Shift[]>> => {
+    try {
+      const response = await apiClient.get(`/shifts/history/${employeeId}`);
       return response.data;
     } catch (error) {
       throw error;

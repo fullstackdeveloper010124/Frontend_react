@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/Sidebar/AdminSidebar';
 import { Header } from '@/components/navbar/AdminHeader';
 import { ThemeProvider } from '@/components/New folder/ThemeProvider';
-import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2, Clock, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { teamAPI, projectAPI, TeamMember, Project } from '@/lib/api';
+import { teamAPI, projectAPI, shiftAPI, TeamMember, Project, Shift } from '@/lib/api';
 
 interface NewMember {
   employeeId: string;
@@ -30,6 +30,7 @@ interface NewMember {
   charges: number;
   status: 'Active' | 'Inactive' | 'Pending';
   shift: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+  isUser: any;
 }
 
 const Team = () => {
@@ -37,9 +38,34 @@ const Team = () => {
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [isEditMemberOpen, setIsEditMemberOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isShiftAssignOpen, setIsShiftAssignOpen] = useState(false);
   const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
   const [currentMember, setCurrentMember] = useState<TeamMember | null>(null);
+  const [memberForShift, setMemberForShift] = useState<TeamMember | null>(null);
   const [timePeriod, setTimePeriod] = useState<string>('Weekly');
+  
+  // Get current user role for permissions
+  const [currentUserRole, setCurrentUserRole] = useState<string>('Employee');
+  
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    console.log('Current user from localStorage:', user);
+    console.log('User role:', user.role);
+    setCurrentUserRole(user.role || 'Employee');
+  }, []);
+  
+  // Shift assignment state
+  const [shiftData, setShiftData] = useState({
+    shiftType: 'Hourly' as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly',
+    startTime: '09:00',
+    endTime: '17:00',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    description: '',
+    hoursPerDay: 8,
+    daysPerWeek: 5,
+    weeksPerMonth: 4,
+    monthlyHours: 160
+  });
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -65,10 +91,26 @@ const Team = () => {
     role: 'Employee',
     charges: 0,
     status: 'Active',
-    shift: 'Monthly'
+    shift: 'Monthly',
+    isUser: false
   });
 
   const { toast } = useToast();
+
+  // Permission helper functions
+  const canEditMember = (memberRole: string) => {
+    console.log('canEditMember - currentUserRole:', currentUserRole, 'memberRole:', memberRole);
+    if (currentUserRole === 'Admin' || currentUserRole === 'admin') return true; // Admin can edit all
+    if ((currentUserRole === 'Manager' || currentUserRole === 'manager') && (memberRole === 'Employee' || memberRole === 'employee')) return true; // Manager can edit employees
+    return false; // Employee cannot edit anyone
+  };
+
+  const canDeleteMember = (memberRole: string) => {
+    console.log('canDeleteMember - currentUserRole:', currentUserRole, 'memberRole:', memberRole);
+    if (currentUserRole === 'Admin' || currentUserRole === 'admin') return true; // Admin can delete all
+    if ((currentUserRole === 'Manager' || currentUserRole === 'manager') && (memberRole === 'Employee' || memberRole === 'employee')) return true; // Manager can delete employees
+    return false; // Employee cannot delete anyone
+  };
 
   useEffect(() => {
     if (isAddMemberOpen) {
@@ -203,7 +245,8 @@ const Team = () => {
           role: 'Employee',
           charges: 0,
           status: 'Active',
-          shift: 'Monthly'
+          shift: 'Monthly',
+          isUser: false
         });
 
         setIsAddMemberOpen(false);
@@ -294,6 +337,7 @@ const Team = () => {
 
     if (currentMember.name && currentMember.project && currentMember.email) {
       try {
+        console.log('Attempting to update member:', currentMember._id, currentMember);
         await teamAPI.updateTeamMember(currentMember._id, currentMember);
         const updatedMembersRes = await teamAPI.getAllTeam();
         const updatedData = updatedMembersRes?.success && Array.isArray(updatedMembersRes.data) 
@@ -306,11 +350,79 @@ const Team = () => {
         setIsEditMemberOpen(false);
         setCurrentMember(null);
       } catch (err: any) {
+        console.error('Update member error:', err);
+        console.error('Error response:', err.response?.data);
         toast({ title: 'Error', description: err.response?.data?.error || 'Failed to update member', variant: 'destructive' });
       }
     }
   };
 
+  // Function to open shift assignment modal
+  const openShiftAssignModal = (member: TeamMember) => {
+    setMemberForShift(member);
+    // Reset shift data to defaults
+    setShiftData({
+      shiftType: member.shift || 'Hourly',
+      startTime: '09:00',
+      endTime: '17:00',
+      workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      description: '',
+      hoursPerDay: 8,
+      daysPerWeek: 5,
+      weeksPerMonth: 4,
+      monthlyHours: 160
+    });
+    setIsShiftAssignOpen(true);
+  };
+
+  // Function to handle shift assignment
+  const handleAssignShift = async () => {
+    if (!memberForShift) return;
+
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const assignedBy = currentUser._id || 'admin';
+
+      await shiftAPI.assignShift({
+        employeeId: memberForShift._id,
+        shiftType: shiftData.shiftType,
+        startTime: shiftData.startTime,
+        endTime: shiftData.endTime,
+        workingDays: shiftData.workingDays,
+        description: shiftData.description,
+        hoursPerDay: shiftData.hoursPerDay,
+        daysPerWeek: shiftData.daysPerWeek,
+        weeksPerMonth: shiftData.weeksPerMonth,
+        monthlyHours: shiftData.monthlyHours,
+        assignedBy
+      });
+
+      toast({
+        title: 'Success',
+        description: `Shift assigned successfully to ${memberForShift.name}`
+      });
+
+      setIsShiftAssignOpen(false);
+      setMemberForShift(null);
+
+      // Refresh team members to show updated shift
+      const updatedMembersRes = await teamAPI.getAllTeam();
+      const updatedData = updatedMembersRes?.success && Array.isArray(updatedMembersRes.data) 
+        ? updatedMembersRes.data 
+        : Array.isArray(updatedMembersRes) 
+        ? updatedMembersRes 
+        : [];
+      setTeamMembers(updatedData);
+
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to assign shift';
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    }
+  };
 
   // Function to reorder employee IDs to be sequential
   const reorderEmployeeIds = async () => {
@@ -484,50 +596,58 @@ const Team = () => {
                 <p className="text-lg text-gray-600 dark:text-gray-400">Manage team members, sync signup data, and track activity</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="outline"
-                  onClick={syncSignupData}
-                  disabled={syncLoading || loading}
-                  className="flex items-center space-x-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300"
-                >
-                  {syncLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Syncing...</span>
-                    </>
-                  ) : (
-                    <span>🔄 Sync Data</span>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    setReorderLoading(true);
-                    try {
-                      await reorderEmployeeIds();
-                    } finally {
-                      setReorderLoading(false);
-                    }
-                  }}
-                  disabled={reorderLoading || loading}
-                  className="flex items-center space-x-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300"
-                >
-                  {reorderLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Reordering...</span>
-                    </>
-                  ) : (
-                    <span>📋 Reorder IDs</span>
-                  )}
-                </Button>
-                <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg">
-                      <Plus className="w-4 h-4" />
-                      <span>Add Member</span>
+                {/* Admin-only actions */}
+                {currentUserRole === 'Admin' && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={syncSignupData}
+                      disabled={syncLoading || loading}
+                      className="flex items-center space-x-2 bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300"
+                    >
+                      {syncLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Syncing...</span>
+                        </>
+                      ) : (
+                        <span>🔄 Sync Data</span>
+                      )}
                     </Button>
-                  </DialogTrigger>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        setReorderLoading(true);
+                        try {
+                          await reorderEmployeeIds();
+                        } finally {
+                          setReorderLoading(false);
+                        }
+                      }}
+                      disabled={reorderLoading || loading}
+                      className="flex items-center space-x-2 bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300"
+                    >
+                      {reorderLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Reordering...</span>
+                        </>
+                      ) : (
+                        <span>📋 Reorder IDs</span>
+                      )}
+                    </Button>
+                  </>
+                )}
+                
+                {/* Add Member - Available for Admin and Manager */}
+                {(currentUserRole === 'Admin' || currentUserRole === 'Manager') && (
+                  <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg">
+                        <Plus className="w-4 h-4" />
+                        <span>Add Member</span>
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Team Member</DialogTitle>
@@ -749,7 +869,8 @@ const Team = () => {
                     </div>
                   </div>
                 </DialogContent>
-                </Dialog>
+                  </Dialog>
+                )}
               </div>
             </div>
 
@@ -896,23 +1017,52 @@ const Team = () => {
                             </span>
                           </td>
                           <td className="py-4 px-6">
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditModal(member)}
-                                className="hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-900/20"
-                              >
-                                <Edit className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => confirmDelete(member._id)}
-                                className="hover:bg-red-50 hover:border-red-300 dark:hover:bg-red-900/20"
-                              >
-                                <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
-                              </Button>
+                            <div className="flex items-center space-x-2">
+                              {/* Edit button - role-based permissions */}
+                              {canEditMember(member.role || 'Employee') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openEditModal(member)}
+                                  className="hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-900/20"
+                                  title="Edit Member"
+                                >
+                                  <Edit className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                </Button>
+                              )}
+                              
+                              {/* Shift assignment button - available for admins and managers */}
+                              {(currentUserRole === 'Admin' || currentUserRole === 'Manager') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openShiftAssignModal(member)}
+                                  className="hover:bg-indigo-50 hover:border-indigo-300 dark:hover:bg-indigo-900/20"
+                                  title="Assign Shift"
+                                >
+                                  <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                </Button>
+                              )}
+                              
+                              {/* Delete button - role-based permissions */}
+                              {canDeleteMember(member.role || 'Employee') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => confirmDelete(member._id)}
+                                  className="hover:bg-red-50 hover:border-red-300 dark:hover:bg-red-900/20"
+                                  title="Delete Member"
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                </Button>
+                              )}
+                              
+                              {/* Show message when no actions available */}
+                              {!canEditMember(member.role || 'Employee') && 
+                               !canDeleteMember(member.role || 'Employee') && 
+                               currentUserRole === 'Employee' && (
+                                <span className="text-xs text-gray-400 italic">No actions available</span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1162,6 +1312,154 @@ const Team = () => {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Shift Assignment Dialog */}
+      <Dialog open={isShiftAssignOpen} onOpenChange={setIsShiftAssignOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Assign Shift to {memberForShift?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="shiftType">Shift Type *</Label>
+                <Select
+                  value={shiftData.shiftType}
+                  onValueChange={(value) => setShiftData({ ...shiftData, shiftType: value as 'Hourly' | 'Daily' | 'Weekly' | 'Monthly' })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select shift type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Hourly">Hourly</SelectItem>
+                    <SelectItem value="Daily">Daily</SelectItem>
+                    <SelectItem value="Weekly">Weekly</SelectItem>
+                    <SelectItem value="Monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  value={shiftData.description}
+                  onChange={(e) => setShiftData({ ...shiftData, description: e.target.value })}
+                  placeholder="Optional description"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="startTime">Start Time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={shiftData.startTime}
+                  onChange={(e) => setShiftData({ ...shiftData, startTime: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="endTime">End Time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={shiftData.endTime}
+                  onChange={(e) => setShiftData({ ...shiftData, endTime: e.target.value })}
+                />
+              </div>
+
+              {shiftData.shiftType === 'Hourly' && (
+                <div>
+                  <Label htmlFor="hoursPerDay">Hours per Day</Label>
+                  <Input
+                    id="hoursPerDay"
+                    type="number"
+                    min="1"
+                    max="24"
+                    value={shiftData.hoursPerDay}
+                    onChange={(e) => setShiftData({ ...shiftData, hoursPerDay: parseInt(e.target.value) || 8 })}
+                  />
+                </div>
+              )}
+
+              {shiftData.shiftType === 'Daily' && (
+                <div>
+                  <Label htmlFor="daysPerWeek">Days per Week</Label>
+                  <Input
+                    id="daysPerWeek"
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={shiftData.daysPerWeek}
+                    onChange={(e) => setShiftData({ ...shiftData, daysPerWeek: parseInt(e.target.value) || 5 })}
+                  />
+                </div>
+              )}
+
+              {shiftData.shiftType === 'Weekly' && (
+                <div>
+                  <Label htmlFor="weeksPerMonth">Weeks per Month</Label>
+                  <Input
+                    id="weeksPerMonth"
+                    type="number"
+                    min="1"
+                    max="5"
+                    value={shiftData.weeksPerMonth}
+                    onChange={(e) => setShiftData({ ...shiftData, weeksPerMonth: parseInt(e.target.value) || 4 })}
+                  />
+                </div>
+              )}
+
+              {shiftData.shiftType === 'Monthly' && (
+                <div>
+                  <Label htmlFor="monthlyHours">Monthly Hours</Label>
+                  <Input
+                    id="monthlyHours"
+                    type="number"
+                    min="1"
+                    value={shiftData.monthlyHours}
+                    onChange={(e) => setShiftData({ ...shiftData, monthlyHours: parseInt(e.target.value) || 160 })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label>Working Days</Label>
+              <div className="grid grid-cols-4 gap-2 mt-2">
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                  <label key={day} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={shiftData.workingDays.includes(day)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShiftData({ ...shiftData, workingDays: [...shiftData.workingDays, day] });
+                        } else {
+                          setShiftData({ ...shiftData, workingDays: shiftData.workingDays.filter(d => d !== day) });
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm">{day.slice(0, 3)}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsShiftAssignOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAssignShift} className="bg-indigo-600 hover:bg-indigo-700">
+                <Clock className="w-4 h-4 mr-2" />
+                Assign Shift
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

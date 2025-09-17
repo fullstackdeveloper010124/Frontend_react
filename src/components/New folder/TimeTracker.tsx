@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { projectAPI, taskAPI, timeEntryAPI, authAPI, type Task, type Project } from '@/lib/api';
+import { projectAPI, taskAPI, timeEntryAPI, authAPI, shiftAPI, type Task, type Project, type Shift, type TimeEntry } from '@/lib/api';
 
 interface TimeTrackerProps {
   onAddEntry: (entry: any) => void;
@@ -29,6 +29,8 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTimeEntry, setActiveTimeEntry] = useState<any>(null);
+  const [assignedShift, setAssignedShift] = useState<Shift | null>(null);
+  const [allowedShiftTypes, setAllowedShiftTypes] = useState<string[]>(['hourly', 'daily', 'weekly', 'monthly']);
 
   // Initialize user and fetch data on component mount
   useEffect(() => {
@@ -38,7 +40,10 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         
         // Get current user
         const userStr = localStorage.getItem('user');
+        const tokenStr = localStorage.getItem('token');
         console.log('🔍 User from localStorage:', userStr);
+        console.log('🔍 Token from localStorage:', tokenStr ? 'Present' : 'Missing');
+        
         if (userStr) {
           try {
             const user = JSON.parse(userStr);
@@ -133,6 +138,20 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         // Fetch all tasks from backend
         await fetchTasks();
         
+        // Fetch employee shift from backend API (priority over user profile)
+        const userForShift = currentUser || (userStr ? JSON.parse(userStr) : null);
+        if (userForShift) {
+          console.log('🔄 Attempting to fetch employee shift from backend for user:', userForShift._id);
+          try {
+            // First try to get shift assignment from backend API
+            await fetchEmployeeShift(userForShift._id);
+          } catch (error) {
+            console.log('⚠️ Backend shift fetch failed, falling back to user profile shift');
+            // Fallback to user profile shift if backend call fails
+            setShiftFromUserProfile(userForShift);
+          }
+        }
+        
       } catch (error) {
         console.error('Failed to initialize data:', error);
       } finally {
@@ -142,6 +161,116 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
 
     initializeData();
   }, []);
+
+  const setShiftFromUserProfile = (user: any) => {
+    try {
+      console.log('🔄 Setting shift from user profile:', user);
+      
+      if (user.shift) {
+        // Normalize shift type to lowercase for consistency
+        const normalizedShiftType = user.shift.toLowerCase();
+        
+        // Validate that the shift type is one of the expected values
+        const validShiftTypes = ['hourly', 'daily', 'weekly', 'monthly'];
+        const shiftType = validShiftTypes.includes(normalizedShiftType) 
+          ? normalizedShiftType 
+          : 'hourly'; // Default to hourly if invalid
+        
+        console.log('✅ User profile shift (normalized):', shiftType);
+        
+        // Create shift data object for display
+        const shiftData: Shift = {
+          _id: `profile-shift-${user._id}`,
+          employeeId: user._id,
+          shiftType: user.shift, // Keep original case for display
+          startTime: '09:00',
+          endTime: '17:00',
+          workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          isActive: true,
+          assignedBy: user._id,
+          assignedDate: new Date().toISOString(),
+          description: `${user.shift} shift from user profile`,
+          hoursPerDay: 8,
+          daysPerWeek: 5,
+          weeksPerMonth: 4,
+          monthlyHours: 160,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setAssignedShift(shiftData);
+        
+        // Set allowed shift types to only the assigned shift
+        setAllowedShiftTypes([shiftType]);
+        
+        // Update the current timeframe tab to match the assigned shift
+        setTimeframeTab(shiftType);
+        
+        console.log('🎯 Time tracker restricted to shift type from user profile:', shiftType);
+      } else {
+        console.log('⚠️ No shift field in user profile, allowing all shift types');
+        // If no shift field, allow all types (default behavior)
+        setAllowedShiftTypes(['hourly', 'daily', 'weekly', 'monthly']);
+      }
+    } catch (error) {
+      console.error('❌ Error setting shift from user profile:', error);
+      // On error, allow all shift types as fallback
+      setAllowedShiftTypes(['hourly', 'daily', 'weekly', 'monthly']);
+    }
+  };
+
+  const fetchEmployeeShift = async (employeeId: string) => {
+    try {
+      console.log('🔄 Fetching shift for employee:', employeeId);
+      const response = await shiftAPI.getEmployeeShift(employeeId);
+      console.log('📋 Shift API response:', response);
+      
+      if (response?.success && response.data) {
+        setAssignedShift(response.data);
+        const shiftType = response.data.shiftType.toLowerCase();
+        console.log('✅ Employee assigned shift from backend:', shiftType);
+        
+        // Set allowed shift types to only the assigned shift
+        setAllowedShiftTypes([shiftType]);
+        
+        // Update the current timeframe tab to match the assigned shift
+        setTimeframeTab(shiftType);
+        
+        console.log('🎯 Time tracker restricted to shift type:', shiftType);
+        return; // Successfully fetched from backend
+      } else {
+        console.log('⚠️ No specific shift assigned in backend, checking user profile');
+        // If no backend shift, try user profile as fallback
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setShiftFromUserProfile(user);
+          return;
+        }
+        
+        console.log('⚠️ No shift found anywhere, allowing all shift types');
+        // If no shift found anywhere, allow all types (default behavior)
+        setAllowedShiftTypes(['hourly', 'daily', 'weekly', 'monthly']);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching employee shift:', error);
+      // On error, try user profile as fallback before allowing all types
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          console.log('🔄 Backend failed, trying user profile fallback');
+          setShiftFromUserProfile(user);
+          return;
+        } catch (parseError) {
+          console.error('❌ Error parsing user profile:', parseError);
+        }
+      }
+      
+      // Final fallback: allow all shift types
+      console.log('🔄 All shift sources failed, allowing all shift types');
+      setAllowedShiftTypes(['hourly', 'daily', 'weekly', 'monthly']);
+    }
+  };
 
   const fetchProjects = async (): Promise<Project[]> => {
     try {
@@ -354,6 +483,13 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
       return;
     }
 
+    // Test API connection first
+    console.log('🔍 Testing API connection before starting timer...');
+    const isApiConnected = await testApiConnection();
+    if (!isApiConnected) {
+      console.log('⚠️ API connection failed, proceeding with offline mode');
+    }
+
     try {
       console.log('📤 Sending timer start request:', {
         userId: userToUse._id,
@@ -372,28 +508,61 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
       });
 
       console.log('📥 Timer start response:', response);
+      console.log('📥 Response type:', typeof response);
+      console.log('📥 Response success:', response?.success);
+      console.log('📥 Response data:', response?.data);
       
-      if (response.success && response.data) {
-        setActiveTimeEntry(response.data);
+      // Handle different response formats from backend
+      let responseData: TimeEntry | null = null;
+      let isSuccess = false;
+      
+      if (response && typeof response === 'object') {
+        // Check if response has success property (standard ApiResponse format)
+        if (response.success === true && response.data) {
+          responseData = response.data;
+          isSuccess = true;
+        }
+        // Check if response is the data itself (direct response from backend)
+        // This handles cases where backend returns TimeEntry directly without ApiResponse wrapper
+        else if ((response as any)._id || (response as any).id) {
+          // Cast to unknown first, then to TimeEntry to satisfy TypeScript
+          responseData = response as unknown as TimeEntry;
+          isSuccess = true;
+        }
+        // Check if response has a nested structure
+        else if (response.data && ((response.data as any)._id || (response.data as any).id)) {
+          responseData = response.data as TimeEntry;
+          isSuccess = true;
+        }
+      }
+      
+      if (isSuccess && responseData) {
+        setActiveTimeEntry(responseData);
         setIsRunning(true);
         setActiveTimer({
-          id: response.data._id,
+          id: responseData._id || responseData.id,
           project: selectedProject,
           task: taskToUse,
           startTime: Date.now()
         });
         console.log('✅ Timer started successfully!');
+        alert('Timer started successfully!');
       } else {
-        console.error('❌ Timer start failed - response not successful:', response);
-        alert(`Failed to start timer: ${response.error || response.message || 'Unknown error'}`);
+        console.error('❌ Timer start failed - invalid response format:', response);
+        const errorMsg = response?.error || response?.message || 'Invalid response format from server';
+        alert(`Failed to start timer: ${errorMsg}`);
       }
     } catch (error) {
       console.error('❌ Timer start error details:', error);
       console.error('❌ Error response:', error.response?.data);
       console.error('❌ Error message:', error.message);
+      console.error('❌ Error status:', error.response?.status);
       
       // Check if it's a network error (backend not running)
-      if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK' || error.message?.includes('ECONNREFUSED')) {
+      if (error.message?.includes('Network Error') || 
+          error.code === 'ERR_NETWORK' || 
+          error.message?.includes('ECONNREFUSED') ||
+          error.message?.includes('fetch')) {
         console.log('🔧 Backend server not running, using offline mode');
         // Simulate successful timer start for testing
         const mockTimeEntry = {
@@ -419,9 +588,21 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         return;
       }
       
+      // Handle specific error responses
       let errorMessage = 'Failed to start timer. ';
-      if (error.response?.data?.error) {
+      
+      if (error.response?.status === 400) {
+        errorMessage += 'Invalid request data. Please check all fields.';
+      } else if (error.response?.status === 401) {
+        errorMessage += 'Authentication failed. Please log in again.';
+      } else if (error.response?.status === 404) {
+        errorMessage += 'API endpoint not found. Please check backend configuration.';
+      } else if (error.response?.status === 500) {
+        errorMessage += 'Server error. Please try again later.';
+      } else if (error.response?.data?.error) {
         errorMessage += error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage += error.response.data.message;
       } else if (error.message) {
         errorMessage += error.message;
       } else {
@@ -587,6 +768,36 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
     setBillable(true);
   };
 
+  // Test API connection
+  const testApiConnection = async () => {
+    try {
+      console.log('🔍 Testing API connection...');
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/projects/all`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('token') && {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          })
+        }
+      });
+      
+      console.log('🔍 API connection test response status:', response.status);
+      console.log('🔍 API connection test response ok:', response.ok);
+      
+      if (response.ok) {
+        console.log('✅ API connection successful');
+        return true;
+      } else {
+        console.log('❌ API connection failed with status:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ API connection test failed:', error);
+      return false;
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
       <div className="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -599,24 +810,63 @@ export const TimeTracker: React.FC<TimeTrackerProps> = ({ onAddEntry, activeTime
         </div>
 
         <Tabs value={timeframeTab} onValueChange={setTimeframeTab} className="mb-6">
-          <TabsList className="grid grid-cols-4 w-full">
-            <TabsTrigger value="hourly">Hourly</TabsTrigger>
-            <TabsTrigger value="daily">Daily</TabsTrigger>
-            <TabsTrigger value="weekly">Weekly</TabsTrigger>
-            <TabsTrigger value="monthly">Monthly</TabsTrigger>
+          <TabsList className={`grid w-full ${allowedShiftTypes.length === 1 ? 'grid-cols-1' : `grid-cols-${allowedShiftTypes.length}`}`}>
+            {allowedShiftTypes.includes('hourly') && (
+              <TabsTrigger value="hourly">Hourly</TabsTrigger>
+            )}
+            {allowedShiftTypes.includes('daily') && (
+              <TabsTrigger value="daily">Daily</TabsTrigger>
+            )}
+            {allowedShiftTypes.includes('weekly') && (
+              <TabsTrigger value="weekly">Weekly</TabsTrigger>
+            )}
+            {allowedShiftTypes.includes('monthly') && (
+              <TabsTrigger value="monthly">Monthly</TabsTrigger>
+            )}
           </TabsList>
-          <TabsContent value="hourly" className="mt-2 text-center text-sm text-gray-500">
-            Track time by the hour - best for detailed work
-          </TabsContent>
-          <TabsContent value="daily" className="mt-2 text-center text-sm text-gray-500">
-            Track time by the day - for full day assignments
-          </TabsContent>
-          <TabsContent value="weekly" className="mt-2 text-center text-sm text-gray-500">
-            Track time by the week - for long-running tasks
-          </TabsContent>
-          <TabsContent value="monthly" className="mt-2 text-center text-sm text-gray-500">
-            Track time by the month - for project-level tracking
-          </TabsContent>
+          
+          {/* Show shift assignment info if only one shift type is allowed */}
+          {allowedShiftTypes.length === 1 && assignedShift && (
+            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    Assigned Shift: {assignedShift.shiftType}
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-300">
+                    {assignedShift.startTime} - {assignedShift.endTime}
+                    {assignedShift.workingDays && assignedShift.workingDays.length > 0 && (
+                      <span> • {assignedShift.workingDays.join(', ')}</span>
+                    )}
+                  </p>
+                </div>
+                <div className="text-blue-600 dark:text-blue-300">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {allowedShiftTypes.includes('hourly') && (
+            <TabsContent value="hourly" className="mt-2 text-center text-sm text-gray-500">
+              Track time by the hour - best for detailed work
+            </TabsContent>
+          )}
+          {allowedShiftTypes.includes('daily') && (
+            <TabsContent value="daily" className="mt-2 text-center text-sm text-gray-500">
+              Track time by the day - for full day assignments
+            </TabsContent>
+          )}
+          {allowedShiftTypes.includes('weekly') && (
+            <TabsContent value="weekly" className="mt-2 text-center text-sm text-gray-500">
+              Track time by the week - for long-running tasks
+            </TabsContent>
+          )}
+          {allowedShiftTypes.includes('monthly') && (
+            <TabsContent value="monthly" className="mt-2 text-center text-sm text-gray-500">
+              Track time by the month - for project-level tracking
+            </TabsContent>
+          )}
         </Tabs>
 
         {!isManualEntry && (

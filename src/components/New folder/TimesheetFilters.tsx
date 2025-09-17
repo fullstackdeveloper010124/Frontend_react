@@ -8,7 +8,9 @@ import {
   Users,
   Briefcase,
   Clock,
-  DollarSign
+  DollarSign,
+  UserCheck,
+  Timer
 } from 'lucide-react';
 
 interface FilterState {
@@ -19,6 +21,15 @@ interface FilterState {
   user: string;
   billable: string;
   searchTerm: string;
+  teamMember: string;
+  shiftType: string;
+}
+
+interface TeamMemberWithShift {
+  _id: string;
+  name: string;
+  shift: string;
+  employeeId: string;
 }
 
 interface TimesheetFiltersProps {
@@ -27,6 +38,8 @@ interface TimesheetFiltersProps {
   onClearFilters: () => void;
   projects?: string[];
   users?: string[];
+  teamMembers?: TeamMemberWithShift[];
+  onTeamMemberSelect?: (member: TeamMemberWithShift | null) => void;
 }
 
 export const TimesheetFilters: React.FC<TimesheetFiltersProps> = ({
@@ -34,7 +47,9 @@ export const TimesheetFilters: React.FC<TimesheetFiltersProps> = ({
   onFiltersChange,
   onClearFilters,
   projects = [],
-  users = []
+  users = [],
+  teamMembers = [],
+  onTeamMemberSelect
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -235,6 +250,45 @@ export const TimesheetFilters: React.FC<TimesheetFiltersProps> = ({
                 ))}
               </select>
             </div>
+
+            {/* Team Member Filter with Shift */}
+            <div className="flex items-center space-x-2">
+              <UserCheck className="w-5 h-5 text-gray-400" />
+              <select
+                value={filters.teamMember}
+                onChange={(e) => {
+                  const selectedMemberId = e.target.value;
+                  const selectedMember = teamMembers.find(m => m._id === selectedMemberId);
+                  
+                  handleFilterChange('teamMember', selectedMemberId);
+                  handleFilterChange('shiftType', selectedMember?.shift || '');
+                  
+                  if (onTeamMemberSelect) {
+                    onTeamMemberSelect(selectedMember || null);
+                  }
+                }}
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              >
+                <option value="">All Team Members</option>
+                {teamMembers.map(member => (
+                  <option key={member._id} value={member._id}>
+                    {member.name} ({member.employeeId}) - {member.shift} Shift
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Shift Type Display */}
+            {filters.shiftType && (
+              <div className="flex items-center space-x-2">
+                <Timer className="w-5 h-5 text-blue-500" />
+                <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    Filtering by: {filters.shiftType} Shift
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* User Filter */}
             <div className="flex items-center space-x-2">

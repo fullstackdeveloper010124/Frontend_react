@@ -2,12 +2,7 @@
 import React, { useState } from 'react';
 import { MoreHorizontal, Trash2, Edit3, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { type TimeEntry } from '@/lib/api';
 
 interface TimeEntriesProps {
