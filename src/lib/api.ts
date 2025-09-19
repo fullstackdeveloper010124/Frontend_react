@@ -14,8 +14,8 @@ export const API_URLS = {
   forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
   
   // Payment and other endpoints
-  upiPayment: `${API_BASE_URL}/payment/upi`, // UPI payment endpoint
-  leaveApplication: `${API_BASE_URL}/leave/apply`, // Leave application endpoint
+  upiPayment: `${API_BASE_URL}/payment/upi`,
+  leaveApplication: `${API_BASE_URL}/leave/apply`,
   notFound: `${API_BASE_URL}/not-found`,
   
   // Projects
@@ -56,13 +56,11 @@ export const API_URLS = {
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000, // Increased timeout
   headers: {
     'Content-Type': 'application/json',
   },
 });
-
-
 
 // Request interceptor to add auth token and user role
 apiClient.interceptors.request.use(
@@ -79,12 +77,24 @@ apiClient.interceptors.request.use(
       config.headers['user-role'] = user.role;
     }
     
-    // Debug: Log the request
-    console.log('Making request to:', config.baseURL + config.url, config.data);
+    // Debug: Log the request (only in development)
+    if (import.meta.env.MODE === 'development') {
+      console.log('🌐 API Request:', {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        baseURL: config.baseURL,
+        data: config.data,
+        headers: {
+          Authorization: config.headers.Authorization ? '[TOKEN]' : 'none',
+          'user-role': config.headers['user-role']
+        }
+      });
+    }
     
     return config;
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -92,15 +102,31 @@ apiClient.interceptors.request.use(
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
+    if (import.meta.env.MODE === 'development') {
+      console.log('✅ API Response:', {
+        status: response.status,
+        url: response.config.url,
+        data: response.data
+      });
+    }
     return response;
   },
   (error: AxiosError) => {
+    console.error('❌ API Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      data: error.response?.data,
+      message: error.message
+    });
+
     if (error.response?.status === 401) {
       // Token expired or invalid
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    
     return Promise.reject(error);
   }
 );
@@ -115,12 +141,17 @@ export interface ApiResponse<T = any> {
 
 // User types
 export interface User {
+  shift: any;
   _id: string;
   name: string;
   email: string;
   role: 'admin' | 'manager' | 'employee';
+  userType?: 'Admin' | 'Manager' | 'TeamMember'; // Added for backend compatibility
   department?: string;
   position?: string;
+  phone?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LoginCredentials {
@@ -211,9 +242,12 @@ export interface TeamMember {
   charges: number;
   status: 'Active' | 'Inactive' | 'Pending';
   shift: 'Hourly' | 'Daily' | 'Weekly' | 'Monthly';
+  userType?: 'TeamMember'; // Added for consistency
+  createdAt?: string;
+  updatedAt?: string;
 } 
 
-// Time Entry types
+// Time Entry types - FIXED: Added missing userType property
 export interface TimeEntry {
   _id: string;
   id?: string; // Optional id property for backend compatibility
@@ -230,6 +264,7 @@ export interface TimeEntry {
   isManualEntry: boolean;
   hourlyRate: number;
   totalAmount: number;
+  userType: string; // ADDED: This was missing and causing the error
   createdAt?: string;
   updatedAt?: string;
 }
@@ -241,6 +276,7 @@ export interface Task {
   description?: string;
   project: string | Project;
   assignedTo?: string | User;
+  assignedModel?: string; // Added for backend compatibility
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'todo' | 'in-progress' | 'completed' | 'on-hold';
   estimatedHours: number;
@@ -278,15 +314,19 @@ export const authAPI = {
   login: async (credentials: LoginCredentials): Promise<ApiResponse<{ token: string; user: User }>> => {
     try {
       const response = await apiClient.post('/auth/login', credentials);
-      // Transform backend response to match our expected format
+      
+      // Normalize the response
+      const responseData = response.data;
+      
       return {
         success: true,
         data: {
-          token: response.data.token,
-          user: response.data.user
+          token: responseData.token,
+          user: responseData.user
         }
       };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Login API error:', error);
       throw error;
     }
   },
@@ -311,29 +351,27 @@ export const authAPI = {
         // TeamMember signup format
         formattedData = {
           name: userData.name,
-          phone: userData.phone || '1234567890', // Default phone if not provided
+          phone: userData.phone || '1234567890',
           email: userData.email,
           password: userData.password,
           confirmPassword: userData.confirmPassword,
-          project: userData.project || '507f1f77bcf86cd799439011', // Default project ID if not provided
-          // Ensure role matches backend enum
+          project: userData.project || '507f1f77bcf86cd799439011',
           role: normalizeRole(userData.role) || 'Employee'
         };
       } else {
         // User signup format (admin/manager)
         formattedData = {
           fullName: userData.fullName || userData.name,
-          phone: userData.phone || '1234567890', // Default phone if not provided
+          phone: userData.phone || '1234567890',
           email: userData.email,
           password: userData.password,
           confirmPassword: userData.confirmPassword,
-          // Ensure proper case for backend
           role: normalizeRole(userData.role) || 'Manager'
         };
       }
       
       const response = await apiClient.post(endpoint, formattedData);
-      // Transform backend response to match our expected format
+      
       return {
         success: true,
         data: {
@@ -341,7 +379,8 @@ export const authAPI = {
           user: response.data.user
         }
       };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Signup API error:', error);
       throw error;
     }
   },
@@ -353,7 +392,6 @@ export const authAPI = {
 
   getCurrentUser: async (): Promise<ApiResponse<User>> => {
     try {
-      // Since there's no /me endpoint, we'll return the user from localStorage
       const userStr = localStorage.getItem('user');
       if (!userStr) {
         throw new Error('No user found');
@@ -419,22 +457,19 @@ export const teamAPI = {
   getAllTeam: async (): Promise<ApiResponse<TeamMember[]>> => {
     try {
       const response = await apiClient.get('/team/all');
-      console.log('Raw team response:', response);
       
       // Handle different response formats
       let data = response.data;
       if (Array.isArray(data)) {
-        // Backend returns array directly
         return { success: true, data };
       } else if (data && data.data) {
-        // Backend returns wrapped data
         return { success: true, data: data.data };
       } else if (data && data.members) {
-        // Backend returns with 'members' key
         return { success: true, data: data.members };
+      } else if (data && data.success) {
+        return data;
       } else {
-        // Fallback to original response
-        return response.data;
+        return { success: false, data: [], error: 'Unexpected response format' };
       }
     } catch (error) {
       console.error('Team API error:', error);
@@ -445,7 +480,6 @@ export const teamAPI = {
   addTeamMember: async (memberData: Omit<TeamMember, '_id'>): Promise<ApiResponse<TeamMember>> => {
     try {
       const response = await apiClient.post('/team/add', memberData);
-      console.log('Add team member response:', response);
       return response.data;
     } catch (error) {
       console.error('Add team member error:', error);
@@ -456,7 +490,6 @@ export const teamAPI = {
   updateTeamMember: async (id: string, memberData: Partial<TeamMember>): Promise<ApiResponse<TeamMember>> => {
     try {
       const response = await apiClient.put(`/team/update/${id}`, memberData);
-      console.log('Update team member response:', response);
       return response.data;
     } catch (error) {
       console.error('Update team member error:', error);
@@ -467,7 +500,6 @@ export const teamAPI = {
   deleteTeamMember: async (id: string): Promise<ApiResponse> => {
     try {
       const response = await apiClient.delete(`/team/delete/${id}`);
-      console.log('Delete team member response:', response);
       return response.data;
     } catch (error) {
       console.error('Delete team member error:', error);
@@ -481,26 +513,19 @@ export const projectAPI = {
   getAllProjects: async (): Promise<ApiResponse<Project[]>> => {
     try {
       const response = await apiClient.get('/projects/all');
-      console.log('Raw API response:', response);
-      console.log('Response data type:', typeof response.data);
-      console.log('Is array:', Array.isArray(response.data));
       
-      // Backend returns array directly, so wrap it in our expected format
+      // Handle different response formats
       if (Array.isArray(response.data)) {
-        console.log('✅ Wrapping array response in ApiResponse format');
         return { success: true, data: response.data };
       } else if (response.data?.success && response.data?.data) {
-        console.log('✅ Response already in ApiResponse format');
         return response.data;
+      } else if (response.data?.data) {
+        return { success: true, data: response.data.data };
       }
       
-      console.log('⚠️ Unexpected response format, returning empty');
       return { success: false, data: [], error: 'Unexpected response format' };
     } catch (error: any) {
       console.error('Project API error:', error);
-      console.error('Error message:', error.message);
-      console.error('Error response:', error.response?.data);
-      // Return empty array on error so UI can show fallback
       return { success: false, data: [], error: error.message || 'Unknown error' };
     }
   },
@@ -516,7 +541,6 @@ export const projectAPI = {
 
   createProject: async (projectData: Omit<Project, '_id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Project>> => {
     try {
-      // Transform the data to match backend expectations
       const transformedData = {
         ...projectData,
         startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : new Date().toISOString(),
@@ -533,7 +557,6 @@ export const projectAPI = {
 
   updateProject: async (id: string, projectData: Partial<Omit<Project, '_id' | 'createdAt' | 'updatedAt'>>): Promise<ApiResponse<Project>> => {
     try {
-      // Transform the data to match backend expectations
       const transformedData = {
         ...projectData,
         startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : undefined,
@@ -596,7 +619,6 @@ export const leaveAPI = {
     }
   },
 
-  // Get leave applications with filters
   getFilteredLeaveApplications: async (filters: {
     status?: string;
     department?: string;
@@ -625,7 +647,7 @@ export const leaveAPI = {
   },
 };
 
-// Time Entry API functions
+// Time Entry API functions - ENHANCED with better error handling and userType support
 export const timeEntryAPI = {
   getAllTimeEntries: async (filters?: {
     userId?: string;
@@ -660,9 +682,16 @@ export const timeEntryAPI = {
     trackingType?: string;
     isManualEntry?: boolean;
     hourlyRate?: number;
+    userType?: string; // Added userType support
   }): Promise<ApiResponse<TimeEntry>> => {
     try {
-      const response = await apiClient.post('/time-entries', timeEntryData);
+      // Ensure userType is included
+      const dataWithUserType = {
+        ...timeEntryData,
+        userType: timeEntryData.userType || 'TeamMember'
+      };
+      
+      const response = await apiClient.post('/time-entries', dataWithUserType);
       return response.data;
     } catch (error) {
       throw error;
@@ -680,36 +709,38 @@ export const timeEntryAPI = {
   }): Promise<ApiResponse<TimeEntry>> => {
     try {
       console.log('🔄 API: Starting timer with data:', timerData);
-      const response = await apiClient.post('/time-entries/start', timerData);
-      console.log('🔄 API: Raw response:', response);
-      console.log('🔄 API: Response status:', response.status);
-      console.log('🔄 API: Response data:', response.data);
+      
+      // Ensure userType is included
+      const dataWithUserType = {
+        ...timerData,
+        userType: timerData.userType || 'TeamMember'
+      };
+      
+      const response = await apiClient.post('/time-entries/start', dataWithUserType);
+      console.log('🔄 API: Timer start response:', response.data);
       
       // Handle different response formats from backend
       if (response.status === 200 || response.status === 201) {
-        // If response.data is already in the correct format
         if (response.data && typeof response.data === 'object') {
           // Check if it's already wrapped in ApiResponse format
-          if (response.data.success !== undefined) {
+          if ('success' in response.data) {
             return response.data;
           }
           // If it's direct data, wrap it
-          else if (response.data._id || response.data.id) {
+          else if ('_id' in response.data || 'id' in response.data) {
             return { success: true, data: response.data };
           }
           // If it has nested data
-          else if (response.data.data) {
+          else if ('data' in response.data) {
             return { success: true, data: response.data.data };
           }
         }
       }
       
-      // Fallback: return the response as-is
+      // Fallback
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔄 API: Timer start error:', error);
-      console.error('🔄 API: Error response:', error.response?.data);
-      console.error('🔄 API: Error status:', error.response?.status);
       throw error;
     }
   },
@@ -723,7 +754,6 @@ export const timeEntryAPI = {
     }
   },
 
-  // Get active timer by user
   getActiveByUser: async (userId: string): Promise<ApiResponse<TimeEntry>> => {
     try {
       const response = await apiClient.get(`/time-entries/active/${userId}`);
@@ -733,7 +763,6 @@ export const timeEntryAPI = {
     }
   },
 
-  // Get time entry by ID
   getTimeEntryById: async (id: string): Promise<ApiResponse<TimeEntry>> => {
     try {
       const response = await apiClient.get(`/time-entries/${id}`);
@@ -743,7 +772,6 @@ export const timeEntryAPI = {
     }
   },
 
-  // Create manual time entry
   createManualEntry: async (data: {
     userId: string;
     project: string;
@@ -756,7 +784,12 @@ export const timeEntryAPI = {
     userType?: string;
   }): Promise<ApiResponse<TimeEntry>> => {
     try {
-      const response = await apiClient.post('/time-entries/manual', data);
+      const dataWithUserType = {
+        ...data,
+        userType: data.userType || 'TeamMember'
+      };
+      
+      const response = await apiClient.post('/time-entries/manual', dataWithUserType);
       return response.data;
     } catch (error) {
       throw error;
@@ -803,7 +836,7 @@ export const timeEntryAPI = {
   },
 };
 
-// Task API functions
+// Task API functions - ENHANCED with assignedModel support
 export const taskAPI = {
   getAllTasks: async (filters?: {
     project?: string;
@@ -847,7 +880,13 @@ export const taskAPI = {
 
   createTask: async (taskData: Omit<Task, '_id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<Task>> => {
     try {
-      const response = await apiClient.post('/tasks', taskData);
+      // Ensure assignedModel is included for backend compatibility
+      const dataWithModel = {
+        ...taskData,
+        assignedModel: taskData.assignedModel || 'TeamMember'
+      };
+      
+      const response = await apiClient.post('/tasks', dataWithModel);
       return response.data;
     } catch (error) {
       throw error;

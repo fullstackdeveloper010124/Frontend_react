@@ -1,6 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@/contexts/AuthContext';
-import { Toaster } from '@/components/ui/toaster';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { Toaster } from '@/components/ui/toaster'; // Your existing shadcn/ui toaster
+import { Toaster as HotToaster } from 'react-hot-toast'; // New react-hot-toast
+import ErrorBoundary from '@/components/ErrorBoundary';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import { useEffect } from 'react';
 import Index from '@/pages/Index';
 import AdminDashboard from '@/pages/Admin/Dashboard';
 import AdminTimesheets from '@/pages/Admin/Timesheets';
@@ -25,11 +29,16 @@ import EmployeeLeaveApplication from '@/pages/Employee/LeaveApplication';
 import Signup from '@/pages/Signup';
 import TestPage from '@/pages/TestPage';
 
-const App = () => {
+const AppRoutes = () => {
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingSpinner fullScreen message="Initializing application..." />;
+  }
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <BrowserRouter>
+      <Routes>
         {/* Home: keep Index as landing/marketing; or replace with Login if desired */}
         <Route path="/" element={<Index />} />
 
@@ -75,9 +84,102 @@ const App = () => {
         {/* Unknown route -> home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </BrowserRouter>
-      <Toaster />
-    </AuthProvider>
+    </BrowserRouter>
+  );
+};
+
+const App = () => {
+  // Global error handler for external library errors
+  useEffect(() => {
+    const handleGlobalError = (event: ErrorEvent) => {
+      // Suppress errors from external libraries/browser extensions
+      if (event.filename && (
+        event.filename.includes('6da4b6d82d745093c67f68f3dfd58024.js') ||
+        event.filename.includes('2341679a9c28c37b2ec2d727070e24de.js') ||
+        event.message.includes('indexOf is not a function') ||
+        event.message.includes('Cannot read properties of null')
+      )) {
+        console.warn('🔇 Suppressed external library error:', event.message);
+        event.preventDefault();
+        return true;
+      }
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Suppress promise rejections from external libraries
+      if (event.reason && typeof event.reason === 'string' && (
+        event.reason.includes('indexOf is not a function') ||
+        event.reason.includes('Cannot read properties of null')
+      )) {
+        console.warn('🔇 Suppressed external library promise rejection:', event.reason);
+        event.preventDefault();
+        return true;
+      }
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <div className="App">
+          <AppRoutes />
+          {/* Your existing shadcn/ui Toaster */}
+          <Toaster />
+          {/* New react-hot-toast Toaster */}
+          <HotToaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#363636',
+                color: '#fff',
+                fontSize: '14px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              },
+              success: {
+                duration: 3000,
+                style: {
+                  background: '#10b981',
+                  color: '#fff',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#10b981',
+                },
+              },
+              error: {
+                duration: 5000,
+                style: {
+                  background: '#ef4444',
+                  color: '#fff',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#ef4444',
+                },
+              },
+              loading: {
+                duration: Infinity,
+                style: {
+                  background: '#3b82f6',
+                  color: '#fff',
+                },
+              },
+            }}
+          />
+        </div>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 

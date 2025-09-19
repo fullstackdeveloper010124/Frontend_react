@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLogin } from '@/hooks/useApi';
 import { API_URLS } from '@/lib/api';
+import ApiHealthCheck from '@/components/ApiHealthCheck';
 
 type Role = 'employee' | 'admin' | 'manager';
 
@@ -83,6 +84,7 @@ const Index: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
+      <ApiHealthCheck />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>

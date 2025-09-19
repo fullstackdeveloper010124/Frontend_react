@@ -1,474 +1,744 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { projectAPI, taskAPI, timeEntryAPI, type Project, type Task } from '@/lib/api';
+// NewTimeTracker.tsx
+import React, { useEffect, useRef, useState } from "react";
+import {
+  projectAPI,
+  taskAPI,
+  timeEntryAPI,
+  authAPI,
+  userAPI,
+  type Project,
+  type Task,
+  type User,
+  type TeamMember,
+} from "@/lib/api";
 
 interface NewTimeTrackerProps {
   onAddEntry?: (entry: any) => void;
+  propCurrentUser?: User | null;
+  currentUser?: User | TeamMember | null;
   activeTimer?: any;
-  setActiveTimer?: (timer: any) => void;
-  currentUser?: any;
+  setActiveTimer?: (t: any) => void;
   onTimerStart?: (timerData: any) => void;
   onTimerStop?: () => void;
+  teamMemberData?: TeamMember | null;
 }
 
-export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
+const TAB_DESCRIPTIONS: Record<string, string> = {
+  Hourly: "Track time by the hour",
+  Daily: "Track time by the day – for tasks across a day",
+  Weekly: "Track time by the week – for long-running tasks",
+  Monthly: "Track time by the month – for big projects",
+};
+
+// Determine available tabs based on user's shift
+const getAvailableTabsForShift = (userShift: string | undefined) => {
+  const allTabs = Object.keys(TAB_DESCRIPTIONS);
+
+  // If user has a specific shift, only show that shift
+  if (userShift && allTabs.includes(userShift)) {
+    return [userShift];
+  }
+
+  // Fallback to all tabs if no specific shift is set
+  return allTabs;
+};
+
+export default function NewTimeTracker({
   onAddEntry,
+  propCurrentUser,
+  currentUser,
   activeTimer,
   setActiveTimer,
-  currentUser: propCurrentUser,
   onTimerStart,
-  onTimerStop
-}) => {
-  const [activeTab, setActiveTab] = useState('Hourly');
-  const [isManualEntry, setIsManualEntry] = useState(false);
-  const [isBillable, setIsBillable] = useState(false);
-  const [totalSeconds, setTotalSeconds] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [selectedProject, setSelectedProject] = useState('');
-  const [selectedTask, setSelectedTask] = useState('');
-  const [description, setDescription] = useState('');
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [showTaskInput, setShowTaskInput] = useState(false);
-  const [newTaskName, setNewTaskName] = useState('');
-  const [creatingTask, setCreatingTask] = useState(false);
-  
-  const timerInterval = useRef<NodeJS.Timeout | null>(null);
+  onTimerStop,
+  teamMemberData,
+}: NewTimeTrackerProps) {
+  const [localUser, setLocalUser] = useState<User | null>(null);
 
-  const tabDescriptions = {
-    'Hourly': 'Track time by the hour',
-    'Daily': 'Track time by the day – for tasks across a day',
-    'Weekly': 'Track time by the week – for long-running tasks',
-    'Monthly': 'Track time by the month – for big projects'
+  // Initialize available tabs based on teamMemberData shift if available
+  const getInitialTabs = () => {
+    if (teamMemberData?.shift) {
+      return getAvailableTabsForShift(teamMemberData.shift);
+    }
+    // If no teamMemberData yet, start with all tabs - will be filtered when data loads
+    return Object.keys(TAB_DESCRIPTIONS);
   };
 
+  const [availableTabs, setAvailableTabs] = useState<string[]>(
+    getInitialTabs()
+  );
+  const [activeTab, setActiveTab] = useState<string>(
+    teamMemberData?.shift || "Hourly"
+  );
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [selectedTask, setSelectedTask] = useState<string>("");
+  const [showTaskInput, setShowTaskInput] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [creatingTask, setCreatingTask] = useState(false);
+
+  const [isManualEntry, setIsManualEntry] = useState(false);
+  const [isBillable, setIsBillable] = useState(false);
+  const [description, setDescription] = useState("");
+
+  // Timer / duration
+  const [isRunning, setIsRunning] = useState(false);
+  const [totalSeconds, setTotalSeconds] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false); // Prevent double-clicks
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Manual start/end inputs
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+
+  // ---------- helpers ----------
   const formatTime = (seconds: number) => {
-    const hrs = String(Math.floor(seconds / 3600)).padStart(2, '0');
-    const mins = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-    const secs = String(seconds % 60).padStart(2, '0');
+    const hrs = String(Math.floor(seconds / 3600)).padStart(2, "0");
+    const mins = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
+    const secs = String(seconds % 60).padStart(2, "0");
     return `${hrs}:${mins}:${secs}`;
   };
 
+  // ---------- fetch current user (always latest) ----------
+  const fetchCurrentUser = async () => {
+    try {
+      // prefer propCurrentUser if provided
+      let id = propCurrentUser?._id;
+      if (!id) {
+        const stored = localStorage.getItem("user");
+        if (stored) id = JSON.parse(stored)?._id;
+      }
+      if (!id) return;
+
+      const res = await userAPI.getUserById(id);
+      if (res.success && res.data) {
+        setLocalUser(res.data);
+
+        // Get available tabs based on user's shift
+        const userShift = (res.data as User & { shift?: string })?.shift;
+        const filteredTabs = getAvailableTabsForShift(userShift);
+        setAvailableTabs(filteredTabs);
+
+        // Set active tab to user's shift if valid, otherwise first available
+        if (userShift && filteredTabs.includes(userShift)) {
+          setActiveTab(userShift);
+        } else {
+          setActiveTab(filteredTabs[0] || "Hourly");
+        }
+
+        // persist refreshed user locally (optional)
+        try {
+          localStorage.setItem("user", JSON.stringify(res.data));
+        } catch (e) {
+          // Handle error silently
+          console.warn("Failed to save user to localStorage:", e);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to refresh user:", e);
+    }
+  };
+
+  // ---------- fetch projects / tasks (use correct API method names) ----------
+  const fetchProjects = async () => {
+    try {
+      const res = await projectAPI.getAllProjects(); // CORRECT name
+      if (res.success && Array.isArray(res.data)) {
+        setProjects(res.data);
+      } else {
+        setProjects([]);
+      }
+    } catch (e) {
+      console.error("Failed to load projects", e);
+      setProjects([]);
+    }
+  };
+
+  const fetchTasksForProject = async (projectId: string) => {
+    try {
+      const res = await taskAPI.getTasksByProject(projectId); // CORRECT name
+      if (res.success && Array.isArray(res.data)) {
+        setTasks(res.data);
+      } else {
+        setTasks([]);
+      }
+    } catch (e) {
+      console.error("Failed to load tasks for project", e);
+      setTasks([]);
+    }
+  };
+
+  // ---------- create quick task ----------
   const createNewTask = async () => {
     if (!newTaskName.trim() || !selectedProject) {
-      alert('Please enter a task name and select a project.');
+      alert("Please enter a task name and select a project.");
       return;
     }
-
+    setCreatingTask(true);
     try {
-      setCreatingTask(true);
-      const taskData = {
+      const payload = {
         name: newTaskName.trim(),
-        description: `Task created from time tracker`,
+        description: "Task created from time tracker",
         project: selectedProject,
-        assignedModel: 'TeamMember', // Required field for backend
-        priority: 'medium' as const,
-        status: 'todo' as const,
+        assignedModel: "TeamMember",
+        priority: "medium" as const,
+        status: "todo" as const,
         estimatedHours: 0,
         actualHours: 0,
         tags: [],
-        isActive: true
+        isActive: true,
       };
-
-      console.log('Creating task with data:', taskData);
-      const response = await taskAPI.createTask(taskData);
-      if (response.success && response.data) {
-        // Add the new task to the tasks list
-        setTasks(prev => [...prev, response.data!]);
-        // Select the newly created task
-        setSelectedTask(response.data._id);
-        // Reset the input
-        setNewTaskName('');
+      const resp = await taskAPI.createTask(payload);
+      if (resp.success && resp.data) {
+        setTasks((s) => [...s, resp.data]);
+        setSelectedTask(resp.data._id);
+        setNewTaskName("");
         setShowTaskInput(false);
-        console.log('Task created successfully:', response.data);
+      } else {
+        alert(resp.message || "Failed to create task");
       }
-    } catch (error: any) {
-      console.error('Failed to create task:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      
-      let errorMessage = 'Failed to create task. Please try again.';
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      }
-      
-      alert(errorMessage);
+    } catch (err: unknown) {
+      console.error("createNewTask error", err);
+      const error = err as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
+      alert(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to create task"
+      );
     } finally {
       setCreatingTask(false);
     }
   };
 
+  // ---------- start / stop timer OR save manual entry ----------
   const handleStartStop = async () => {
-    if (!selectedProject || (!selectedTask && !showTaskInput)) {
-      alert('Please select a project and task before starting the timer.');
+    console.log(
+      "🔄 handleStartStop called - isRunning:",
+      isRunning,
+      "isProcessing:",
+      isProcessing,
+      "activeTimer:",
+      activeTimer
+    );
+
+    // Prevent double-clicks
+    if (isProcessing) {
+      console.log("⚠️ Already processing, ignoring click");
       return;
     }
 
-    if (!isRunning) {
+    if (!selectedProject || (!selectedTask && !showTaskInput)) {
+      alert("Please select a project and task before continuing.");
+      return;
+    }
+
+    setIsProcessing(true); // Set processing state
+
+    // Get the stable user ID from teamMemberData first, then fallback to other sources
+    const effectiveUserId =
+      teamMemberData?._id || // Prioritize team member ID (most reliable)
+      propCurrentUser?._id ||
+      currentUser?._id ||
+      (() => {
+        const stored = localStorage.getItem("user");
+        try {
+          return stored ? JSON.parse(stored)?._id : undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+
+    console.log(
+      "🔍 Getting user ID - teamMemberData._id:",
+      teamMemberData?._id
+    );
+    console.log(
+      "🔍 Getting user ID - propCurrentUser._id:",
+      propCurrentUser?._id
+    );
+    console.log("🔍 Getting user ID - effectiveUserId:", effectiveUserId);
+    if (!effectiveUserId) {
+      alert("No user found. Please sign in again.");
+      setIsProcessing(false);
+      return;
+    }
+
+    // Manual save
+    if (isManualEntry) {
+      if (!manualStart || !manualEnd) {
+        alert("Please select start and end time.");
+        return;
+      }
+      const s = new Date(manualStart);
+      const e = new Date(manualEnd);
+      if (isNaN(s.getTime()) || isNaN(e.getTime()) || e <= s) {
+        alert(
+          "Please select a valid start and end time (end must be after start)."
+        );
+        return;
+      }
+      const durationSeconds = Math.floor((e.getTime() - s.getTime()) / 1000);
+      setTotalSeconds(durationSeconds);
+
+      // save to backend
       try {
-        let taskId = selectedTask;
-        
-        // If we're in task input mode, create the task first
-        if (showTaskInput && newTaskName.trim()) {
-          await createNewTask();
-          // After creating task, selectedTask should be set to the new task ID
-          taskId = selectedTask;
-        }
-        
-        if (!taskId) {
-          alert('Please select or create a task before starting the timer.');
-          return;
-        }
-        
-        // Start timer via API (only for non-manual entries)
-        if (currentUser && !isManualEntry) {
-          // Validate all required fields
-          if (!currentUser._id || !selectedProject || !taskId) {
-            alert('Missing required data. Please ensure you are logged in and have selected a project and task.');
-            return;
-          }
-          
-          // Check for existing active timer first
-          if (activeTimer) {
-            alert('You already have an active timer running. Please stop it first.');
-            return;
-          }
-          
-          const timerData = {
-            userId: currentUser._id,
-            project: selectedProject,
-            task: taskId,
-            description: description || 'Time tracking',
-            trackingType: activeTab,
-            userType: currentUser.userType || 'TeamMember'
-          };
-          
-          console.log('=== TIMER START DEBUG ===');
-          console.log('🚀 Starting timer with employee details:');
-          console.log('Timer Data:', timerData);
-          console.log('📋 Employee Details:');
-          console.log('  - User ID:', currentUser._id);
-          console.log('  - Name:', currentUser.name);
-          console.log('  - Email:', currentUser.email);
-          console.log('  - User Type:', currentUser.userType);
-          console.log('  - Role:', currentUser.role);
-          console.log('📊 Project & Task Details:');
-          console.log('  - Project ID:', selectedProject);
-          console.log('  - Task ID:', taskId);
-          console.log('  - Description:', description || 'Time tracking');
-          console.log('  - Tracking Type:', activeTab);
-          console.log('🌐 API Call:', 'POST /time-entries/start');
-          console.log('📦 Complete User Object:', currentUser);
-          
-          const response = await timeEntryAPI.startTimer(timerData);
-          if (response.success && response.data) {
-            setActiveTimer?.(response.data);
-            onAddEntry?.(response.data);
-          }
-        }
-        
-        setIsRunning(true);
-        timerInterval.current = setInterval(() => {
-          setTotalSeconds(prev => prev + 1);
-        }, 1000);
-      } catch (error: any) {
-        console.error('=== TIMER START ERROR DEBUG ===');
-        console.error('Full error object:', error);
-        console.error('Error message:', error.message);
-        console.error('Error response:', error.response);
-        console.error('Response status:', error.response?.status);
-        console.error('Response data:', error.response?.data);
-        console.error('Response headers:', error.response?.headers);
-        console.error('Request config:', error.config);
-        console.error('Timer data that was sent:', {
-          userId: currentUser?._id,
+        const entryData = {
+          userId: effectiveUserId,
           project: selectedProject,
           task: selectedTask,
-          description: description || 'Time tracking',
+          description: description || "Manual time entry",
+          startTime: s.toISOString(),
+          endTime: e.toISOString(),
+          duration: durationSeconds, // Explicitly pass the calculated duration
+          billable: isBillable,
           trackingType: activeTab,
-          userType: currentUser.userType || 'TeamMember'
-        });
-        
-        let errorMessage = 'Unknown error occurred';
-        
-        if (error.response) {
-          // Server responded with error status
-          console.log('Server responded with error status:', error.response.status);
-          if (error.response.data?.error) {
-            errorMessage = error.response.data.error;
-          } else if (error.response.data?.message) {
-            errorMessage = error.response.data.message;
-          } else if (typeof error.response.data === 'string') {
-            errorMessage = error.response.data;
-          } else {
-            errorMessage = `Server error (${error.response.status})`;
-          }
-        } else if (error.request) {
-          // Request was made but no response received
-          console.log('No response received from server');
-          errorMessage = 'No response from server. Check if backend is running.';
+          isManualEntry: true,
+          hourlyRate: 0,
+          userType:
+            propCurrentUser?.userType || currentUser?.userType || "TeamMember",
+        };
+        const resp = await timeEntryAPI.createTimeEntry(entryData);
+        if (resp.success && resp.data) {
+          onAddEntry?.(resp.data);
+          // reset form
+          setManualStart("");
+          setManualEnd("");
+          setSelectedProject("");
+          setSelectedTask("");
+          setDescription("");
+          setIsBillable(false);
+          setTotalSeconds(0);
         } else {
-          // Something else happened
-          errorMessage = error.message || 'Request setup error';
+          alert(resp.message || "Failed to save entry");
         }
-        
-        alert(`Timer start failed: ${errorMessage}`);
+      } catch (err) {
+        console.error("Failed to save manual entry", err);
+        alert("Failed to save manual entry. Check console for details.");
+      } finally {
+        setIsProcessing(false); // Reset processing state
+      }
+      return;
+    }
+
+    // Timer mode
+    if (!isRunning) {
+      // start
+      console.log("🟢 Starting timer...");
+      try {
+        // Start on backend
+        const timerData = {
+          userId: effectiveUserId,
+          project: selectedProject,
+          task: selectedTask,
+          description: description || "Time tracking",
+          trackingType: activeTab,
+          userType:
+            propCurrentUser?.userType || currentUser?.userType || "TeamMember",
+        };
+        console.log("🟢 Calling startTimer API with data:", timerData);
+        const resp = await timeEntryAPI.startTimer(timerData);
+        console.log("🟢 Start timer API response:", resp);
+
+        if (resp.success && resp.data) {
+          console.log(
+            "🟢 Timer started successfully, setting activeTimer:",
+            resp.data
+          );
+          setActiveTimer?.(resp.data);
+
+          // Calculate elapsed time if timer was already running
+          if (resp.data.startTime) {
+            const startTime = new Date(resp.data.startTime);
+            const now = new Date();
+            const elapsedSeconds = Math.floor(
+              (now.getTime() - startTime.getTime()) / 1000
+            );
+            console.log(
+              "🕐 Timer already running for",
+              elapsedSeconds,
+              "seconds"
+            );
+            setTotalSeconds(elapsedSeconds);
+          } else {
+            setTotalSeconds(0);
+          }
+
+          // Don't add to entries list yet - only add when timer stops
+        }
+        setIsRunning(true);
+        console.log("🟢 Set isRunning to true");
+        // start local counter
+        timerIntervalRef.current = setInterval(() => {
+          setTotalSeconds((t) => t + 1);
+        }, 1000);
+      } catch (err) {
+        console.error("Failed to start timer", err);
+        alert("Timer start failed. Check console for details.");
+      } finally {
+        setIsProcessing(false); // Reset processing state
       }
     } else {
+      // stop
+      console.log("🔴 Stopping timer...");
+      console.log("🔴 Current isRunning state:", isRunning);
+      console.log("🔴 Current activeTimer:", activeTimer);
+
       try {
-        // Stop timer via API
-        if (activeTimer && !isManualEntry) {
-          const response = await timeEntryAPI.stopTimer(activeTimer._id);
-          if (response.success) {
+        console.log("🛑 Attempting to stop timer...");
+        console.log("🛑 Active timer:", activeTimer);
+
+        if (activeTimer && activeTimer._id) {
+          console.log("🛑 Calling stopTimer API with ID:", activeTimer._id);
+          const resp = await timeEntryAPI.stopTimer(activeTimer._id);
+          console.log("🛑 Stop timer API response:", resp);
+
+          if (resp.success) {
+            console.log("✅ Timer stopped successfully");
+            console.log("✅ Final timer data:", resp.data);
+
+            // Calculate duration from startTime and endTime if duration field is missing or 0
+            let finalDuration = resp.data?.duration || 0;
+
+            if (
+              finalDuration === 0 &&
+              resp.data?.startTime &&
+              resp.data?.endTime
+            ) {
+              const startTime = new Date(resp.data.startTime);
+              const endTime = new Date(resp.data.endTime);
+              finalDuration = Math.floor(
+                (endTime.getTime() - startTime.getTime()) / 1000
+              );
+              console.log(
+                "🕐 Calculated duration from timestamps:",
+                finalDuration,
+                "seconds"
+              );
+            }
+
+            // Show the actual duration
+            if (finalDuration > 0) {
+              console.log("🕐 Final duration:", finalDuration, "seconds");
+              setTotalSeconds(finalDuration);
+
+              // Wait a moment to show the final duration before resetting
+              setTimeout(() => {
+                setTotalSeconds(0);
+                setSelectedProject("");
+                setSelectedTask("");
+                setDescription("");
+                setIsBillable(false);
+              }, 2000); // Show final duration for 2 seconds
+            } else {
+              // Reset immediately if no duration data
+              console.log("⚠️ No duration calculated, resetting immediately");
+              setTotalSeconds(0);
+              setSelectedProject("");
+              setSelectedTask("");
+              setDescription("");
+              setIsBillable(false);
+            }
+
             setActiveTimer?.(null);
+            onAddEntry?.(resp.data); // Add the completed entry to the list
+          } else {
+            console.error("❌ Stop timer failed:", resp.message);
+            alert(resp.message || "Failed to stop timer");
           }
-        } else if (isManualEntry && currentUser) {
-          // Create manual entry
-          const entryData = {
-            userId: currentUser._id,
-            project: selectedProject,
-            task: selectedTask,
-            description: description || 'Manual time entry',
-            startTime: new Date(Date.now() - totalSeconds * 1000).toISOString(),
-            endTime: new Date().toISOString(),
-            billable: isBillable,
-            trackingType: activeTab,
-            isManualEntry: true,
-            hourlyRate: 0,
-            userType: currentUser.userType || 'TeamMember'
-          };
-          
-          const response = await timeEntryAPI.createTimeEntry(entryData);
-          if (response.success && response.data) {
-            onAddEntry?.(response.data);
-          }
+        } else {
+          console.error("❌ No active timer found to stop");
+          alert("No active timer found");
         }
-        
+
+        // Reset UI state regardless of API result
+        console.log("🔴 Resetting UI state...");
         setIsRunning(false);
-        setTotalSeconds(0);
-        if (timerInterval.current) {
-          clearInterval(timerInterval.current);
-          timerInterval.current = null;
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
         }
-        
-        // Reset form
-        setSelectedProject('');
-        setSelectedTask('');
-        setDescription('');
+        onTimerStop?.();
+
+        // Don't reset form immediately if we got a successful response -
+        // let the success block handle it with a delay to show final duration
+      } catch (err: unknown) {
+        console.error("❌ Failed to stop timer:", err);
+        const error = err as {
+          response?: { data?: { message?: string } };
+          message?: string;
+        };
+        const errorMessage =
+          error?.response?.data?.message ||
+          error?.message ||
+          "Failed to stop timer";
+        alert(errorMessage);
+
+        // Still reset UI state even if API fails
+        console.log("🔴 Resetting UI state after error...");
+        setIsRunning(false);
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        setTotalSeconds(0);
+        setSelectedProject("");
+        setSelectedTask("");
+        setDescription("");
         setIsBillable(false);
-      } catch (error) {
-        console.error('Failed to stop timer:', error);
-        alert('Failed to stop timer. Please try again.');
+      } finally {
+        setIsProcessing(false); // Reset processing state
       }
     }
   };
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-  };
-
-  // Fetch projects on component mount
+  // ---------- effects ----------
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        setLoading(true);
-        
-        // Get current user (prioritize prop over localStorage)
-        if (propCurrentUser) {
-          setCurrentUser(propCurrentUser);
-          console.log('Using prop current user:', propCurrentUser);
-        } else {
-          const userStr = localStorage.getItem('user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            setCurrentUser(user);
-            console.log('Using localStorage user:', user);
-          } else {
-            // Fallback: Create a temporary user for testing
-            const tempUser = {
-              _id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId
-              name: 'Test Employee',
-              email: 'test@example.com',
-              userType: 'TeamMember',
-              role: 'employee'
-            };
-            setCurrentUser(tempUser);
-            console.log('Using temporary user for testing:', tempUser);
-          }
-        }
-        
-        // Fetch all projects
-        const projectResponse = await projectAPI.getAllProjects();
-        if (projectResponse.success && projectResponse.data) {
-          setProjects(projectResponse.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch projects:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // initial load - only fetch projects, not user (we get teamMemberData from props)
+    fetchProjects();
 
-    initializeData();
-    
+    // cleanup timer on unmount
     return () => {
-      if (timerInterval.current) {
-        clearInterval(timerInterval.current);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
       }
     };
-  }, []);
+  }, [propCurrentUser]);
 
-  // Fetch tasks when project is selected
+  // Sync with active timer from props
   useEffect(() => {
-    const fetchTasks = async () => {
-      if (selectedProject) {
-        try {
-          const taskResponse = await taskAPI.getTasksByProject(selectedProject);
-          if (taskResponse.success && taskResponse.data) {
-            setTasks(taskResponse.data);
-          }
-        } catch (error) {
-          console.error('Failed to fetch tasks:', error);
-        }
-      } else {
-        setTasks([]);
-        setSelectedTask('');
-      }
-    };
+    if (activeTimer && activeTimer.startTime) {
+      console.log("🔄 Syncing with active timer:", activeTimer);
+      const startTime = new Date(activeTimer.startTime);
+      const now = new Date();
+      const elapsedSeconds = Math.floor(
+        (now.getTime() - startTime.getTime()) / 1000
+      );
+      console.log(
+        "🕐 Active timer has been running for",
+        elapsedSeconds,
+        "seconds"
+      );
 
-    fetchTasks();
+      setTotalSeconds(elapsedSeconds);
+      setIsRunning(true);
+
+      // Start the local counter if not already running
+      if (!timerIntervalRef.current) {
+        timerIntervalRef.current = setInterval(() => {
+          setTotalSeconds((t) => t + 1);
+        }, 1000);
+      }
+    } else if (!activeTimer && isRunning) {
+      // No active timer but local state thinks it's running - reset
+      console.log("🔄 No active timer found, resetting local state");
+      setIsRunning(false);
+      setTotalSeconds(0);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+    }
+  }, [activeTimer, isRunning]);
+
+  useEffect(() => {
+    if (selectedProject) {
+      fetchTasksForProject(selectedProject);
+    } else {
+      setTasks([]);
+      setSelectedTask("");
+    }
   }, [selectedProject]);
 
+  // compute manual duration preview when inputs change
+  useEffect(() => {
+    if (manualStart && manualEnd) {
+      const s = new Date(manualStart);
+      const e = new Date(manualEnd);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime()) && e > s) {
+        setTotalSeconds(Math.floor((e.getTime() - s.getTime()) / 1000));
+      } else {
+        setTotalSeconds(0);
+      }
+    }
+  }, [manualStart, manualEnd]);
+
+  // Handle teamMemberData changes for shift updates
+  useEffect(() => {
+    console.log("🔍 TeamMemberData:", teamMemberData);
+    console.log("🔍 TeamMemberData shift:", teamMemberData?.shift);
+
+    if (teamMemberData?.shift) {
+      const filteredTabs = getAvailableTabsForShift(teamMemberData.shift);
+      console.log(
+        "🔍 Filtered tabs for shift",
+        teamMemberData.shift,
+        ":",
+        filteredTabs
+      );
+      setAvailableTabs(filteredTabs);
+
+      // Set active tab to the user's shift
+      setActiveTab(teamMemberData.shift);
+    } else {
+      console.log("🔍 No shift in teamMemberData, using all tabs");
+      // If no specific shift, show all tabs (fallback behavior)
+      const allTabs = Object.keys(TAB_DESCRIPTIONS);
+      setAvailableTabs(allTabs);
+      setActiveTab("Hourly"); // Default to Hourly if no shift assigned
+    }
+  }, [teamMemberData]);
+
+  // ---------- UI ----------
   return (
-    <div className="container mx-auto mt-5 p-4 border rounded shadow-sm bg-white" style={{ maxWidth: '700px' }}>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-3">
-        <h4 className="m-0 text-xl font-semibold text-gray-800">Time Tracker</h4>
+    <div className="container mx-auto mt-5 p-4 border rounded shadow-sm bg-white max-w-2xl">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-xl font-semibold text-gray-800 m-0">
+          Time Tracker
+        </h4>
         <div className="flex items-center">
-          <label className="mr-2 text-sm font-medium text-gray-700" htmlFor="manualToggle">
-            Manual Entry
-          </label>
-          <label className="relative inline-block w-11 h-6">
-            <input
-              type="checkbox"
-              id="manualToggle"
-              className="sr-only"
-              checked={isManualEntry}
-              onChange={(e) => setIsManualEntry(e.target.checked)}
-            />
-            <span
-              className={`absolute cursor-pointer top-0 left-0 right-0 bottom-0 rounded-full transition-all duration-400 ${
-                isManualEntry ? 'bg-green-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`absolute h-4.5 w-4.5 rounded-full bg-white transition-all duration-400 top-0.75 ${
-                  isManualEntry ? 'translate-x-5' : 'translate-x-0.75'
-                }`}
-                style={{
-                  height: '18px',
-                  width: '18px',
-                  top: '3px',
-                  left: isManualEntry ? '20px' : '3px'
-                }}
-              />
-            </span>
-          </label>
+          <label className="mr-2 text-sm font-medium">Manual Entry</label>
+          <input
+            type="checkbox"
+            checked={isManualEntry}
+            onChange={(e) => setIsManualEntry(e.target.checked)}
+          />
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs (dynamic) */}
       <div className="mb-3 text-center">
-        <div className="flex w-full justify-center">
-          {Object.keys(tabDescriptions).map((tab) => (
+        <div className="flex justify-center flex-wrap gap-2">
+          {availableTabs.map((tab) => (
             <button
               key={tab}
-              className={`border-none bg-none py-2.5 px-5 font-medium cursor-pointer transition-all duration-200 ${
-                activeTab === tab
-                  ? 'bg-gray-100 rounded-lg'
-                  : 'hover:bg-gray-50'
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded ${
+                activeTab === tab ? "bg-blue-100 text-blue-700" : "bg-gray-100"
               }`}
-              style={{ padding: window.innerWidth <= 767 ? '5px 10px' : '10px 20px' }}
-              onClick={() => handleTabChange(tab)}
             >
               {tab}
             </button>
           ))}
         </div>
         <small className="text-gray-500 block mt-2">
-          {tabDescriptions[activeTab as keyof typeof tabDescriptions]}
+          {TAB_DESCRIPTIONS[activeTab] ?? "Select a shift"}
         </small>
+        {currentUser?.shift && (
+          <small className="text-blue-600 block mt-1 font-medium">
+            Your assigned shift: {currentUser.shift}
+          </small>
+        )}
       </div>
 
-      {/* Timer Display */}
-      <div className="text-center">
-        <div className="text-3xl font-bold my-5 text-gray-800">
-          {formatTime(totalSeconds)}
-        </div>
-        <button
-          onClick={handleStartStop}
-          className={`font-medium py-2 px-4 rounded transition-colors duration-200 min-w-32 ${
-            isRunning
-              ? 'bg-red-500 hover:bg-red-600 text-white'
-              : (!selectedProject || (!selectedTask && !showTaskInput))
-              ? 'bg-gray-400 cursor-not-allowed text-white'
-              : 'bg-green-500 hover:bg-green-600 text-white'
-          }`}
-          disabled={!selectedProject || (!selectedTask && !showTaskInput)}
-        >
-          {isRunning ? '■ Stop' : '▶ Start'}
-        </button>
+      {/* Timer / Manual UI */}
+      <div className="text-center my-4">
+        {isManualEntry ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Start Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={manualStart}
+                  onChange={(e) => setManualStart(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  End Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={manualEnd}
+                  onChange={(e) => setManualEnd(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <div className="font-semibold text-lg">
+              Duration: {formatTime(totalSeconds)}
+            </div>
+
+            <button
+              onClick={handleStartStop}
+              className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
+            >
+              Save Entry
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="text-3xl font-bold my-5">
+              {formatTime(totalSeconds)}
+            </div>
+            <button
+              onClick={handleStartStop}
+              disabled={!selectedProject || !selectedTask || isProcessing}
+              className={`py-2 px-5 rounded text-white ${
+                isProcessing
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : isRunning
+                  ? "bg-red-500 hover:bg-red-600"
+                  : "bg-green-500 hover:bg-green-600"
+              }`}
+            >
+              {isProcessing
+                ? "Processing..."
+                : isRunning
+                ? "■ Stop"
+                : "▶ Start"}
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Form Fields */}
-      <div className="flex flex-wrap -mx-2 mt-4">
+      {/* Project & Task */}
+      <div className="flex flex-wrap -mx-2">
         <div className="w-full md:w-1/2 px-2 mb-3">
-          <label htmlFor="projectSelect" className="block text-sm font-medium text-gray-700 mb-1">
-            Project *
-          </label>
+          <label className="block text-sm font-medium mb-1">Project *</label>
           <select
-            id="projectSelect"
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-3 py-2 border rounded"
           >
-            <option value="" disabled>Select project</option>
-            {loading ? (
-              <option disabled>Loading projects...</option>
-            ) : (
-              projects.map((project) => (
-                <option key={project._id} value={project._id}>
-                  {project.name}
-                </option>
-              ))
-            )}
+            <option value="">Select project</option>
+            {projects.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.name}
+              </option>
+            ))}
           </select>
         </div>
+
         <div className="w-full md:w-1/2 px-2 mb-3">
           <div className="flex justify-between items-center mb-1">
-            <label htmlFor="taskSelect" className="block text-sm font-medium text-gray-700">
-              Task *
-            </label>
+            <label className="block text-sm font-medium">Task *</label>
             {selectedProject && (
               <button
                 type="button"
                 onClick={() => {
-                  setShowTaskInput(!showTaskInput);
+                  setShowTaskInput((s) => !s);
                   if (showTaskInput) {
-                    setNewTaskName('');
-                    setSelectedTask('');
+                    setNewTaskName("");
+                    setSelectedTask("");
                   }
                 }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                className="text-xs text-blue-600"
               >
-                {showTaskInput ? 'Select from list' : '+ Add new task'}
+                {showTaskInput ? "Select from list" : "+ Add new task"}
               </button>
             )}
           </div>
-          
+
           {showTaskInput ? (
             <div className="space-y-2">
               <input
@@ -476,29 +746,22 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
                 value={newTaskName}
                 onChange={(e) => setNewTaskName(e.target.value)}
                 placeholder="Enter new task name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    createNewTask();
-                  }
-                }}
+                className="w-full px-3 py-2 border rounded"
               />
               <div className="flex gap-2">
                 <button
-                  type="button"
                   onClick={createNewTask}
                   disabled={creatingTask || !newTaskName.trim()}
-                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
                 >
-                  {creatingTask ? 'Creating...' : 'Create Task'}
+                  {creatingTask ? "Creating..." : "Create Task"}
                 </button>
                 <button
-                  type="button"
                   onClick={() => {
                     setShowTaskInput(false);
-                    setNewTaskName('');
+                    setNewTaskName("");
                   }}
-                  className="px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  className="px-3 py-1 text-xs bg-gray-300 rounded hover:bg-gray-400"
                 >
                   Cancel
                 </button>
@@ -506,17 +769,16 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
             </div>
           ) : (
             <select
-              id="taskSelect"
               value={selectedTask}
               onChange={(e) => setSelectedTask(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border rounded"
             >
-              <option value="" disabled>
-                {selectedProject ? 'Select task' : 'Select a project first'}
+              <option value="">
+                {selectedProject ? "Select task" : "Select a project first"}
               </option>
-              {selectedProject && tasks.map((task) => (
-                <option key={task._id} value={task._id}>
-                  {task.name}
+              {tasks.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name}
                 </option>
               ))}
             </select>
@@ -526,50 +788,24 @@ export const NewTimeTracker: React.FC<NewTimeTrackerProps> = ({
 
       {/* Description */}
       <div className="mb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <label className="block text-sm font-medium mb-1">Description</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
-          placeholder="What did you work on?"
+          className="w-full px-3 py-2 border rounded resize-vertical"
           rows={3}
         />
       </div>
 
-      {/* Billable Toggle */}
-      <div className="text-left">
-        <div className="flex items-center">
-          <label className="mr-2 text-sm font-medium text-gray-700" htmlFor="billableToggle">
-            Billable
-          </label>
-          <label className="relative inline-block w-11 h-6">
-            <input
-              type="checkbox"
-              id="billableToggle"
-              className="sr-only"
-              checked={isBillable}
-              onChange={(e) => setIsBillable(e.target.checked)}
-            />
-            <span
-              className={`absolute cursor-pointer top-0 left-0 right-0 bottom-0 rounded-full transition-all duration-400 ${
-                isBillable ? 'bg-green-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`absolute h-4.5 w-4.5 rounded-full bg-white transition-all duration-400 top-0.75 ${
-                  isBillable ? 'translate-x-5' : 'translate-x-0.75'
-                }`}
-                style={{
-                  height: '18px',
-                  width: '18px',
-                  top: '3px',
-                  left: isBillable ? '20px' : '3px'
-                }}
-              />
-            </span>
-          </label>
-        </div>
+      {/* Billable */}
+      <div className="flex items-center gap-2">
+        <label className="text-sm font-medium">Billable</label>
+        <input
+          type="checkbox"
+          checked={isBillable}
+          onChange={(e) => setIsBillable(e.target.checked)}
+        />
       </div>
     </div>
   );
-};
+}
